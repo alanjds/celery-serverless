@@ -8,14 +8,11 @@ from setuptools import setup, find_packages
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-with open('HISTORY.rst') as history_file:
-    history = history_file.read()
-
 requirements = ['Click>=6.0', ]
 
 setup_requirements = ['pytest-runner', ]
 
-test_requirements = ['pytest', ]
+test_requirements = ['pytest', 'coverage']
 
 setup(
     author="Alan Justino & Samuel Barbosa Neto",
@@ -40,10 +37,10 @@ setup(
     },
     install_requires=requirements,
     license="Apache Software License 2.0",
-    long_description=readme + '\n\n' + history,
+    long_description=readme,
     include_package_data=True,
     keywords='celery_worker_serverless',
-    name='celery_worker_serverless',
+    name='celery-worker-serverless',
     packages=find_packages(include=['celery_worker_serverless']),
     setup_requires=setup_requirements,
     test_suite='tests',

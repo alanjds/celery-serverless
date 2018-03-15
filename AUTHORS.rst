@@ -5,7 +5,15 @@ Credits
 Development Lead
 ----------------
 
-* Alan Justino & Samuel Barbosa Neto <alan.justino@yahoo.com.br>
+* Alan Justino <alan.justino[at]yahoo.com.br>
+* Samuel Barbosa Neto
+
+
+Sponsors
+--------
+
+* GetNinjas <http://www.getninjas.com.br>
+
 
 Contributors
 ------------
