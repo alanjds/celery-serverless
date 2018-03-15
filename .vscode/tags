@@ -1,0 +1,71 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+CliRunner	../tests/test_celery_worker_serverless.py	/^from click.testing import CliRunner$/;"	kind:namespace	line:8
+__email__	../celery_worker_serverless/__init__.py	/^__email__ = 'alan.justino@yahoo.com.br'$/;"	kind:variable	line:6
+__init__.py	../celery_worker_serverless/__init__.py	1;"	kind:file	line:1
+__version__	../celery_worker_serverless/__init__.py	/^__version__ = '0.1.0'$/;"	kind:variable	line:7
+author	../docs/conf.py	/^author = u"Alan Justino & Samuel Barbosa Neto"$/;"	kind:variable	line:52
+author	../setup.py	/^    author="Alan Justino & Samuel Barbosa Neto",$/;"	kind:variable	line:21
+author_email	../setup.py	/^    author_email='alan.justino@yahoo.com.br',$/;"	kind:variable	line:22
+celery_worker_serverless	../docs/conf.py	/^import celery_worker_serverless$/;"	kind:namespace	line:25
+celery_worker_serverless	../tests/test_celery_worker_serverless.py	/^from celery_worker_serverless import celery_worker_serverless$/;"	kind:namespace	line:10
+celery_worker_serverless.py	../celery_worker_serverless/celery_worker_serverless.py	1;"	kind:file	line:1
+classifiers	../setup.py	/^    classifiers=[$/;"	kind:variable	line:23
+cli	../tests/test_celery_worker_serverless.py	/^from celery_worker_serverless import cli$/;"	kind:namespace	line:11
+cli.py	../celery_worker_serverless/cli.py	1;"	kind:file	line:1
+click	../celery_worker_serverless/cli.py	/^import click$/;"	kind:namespace	line:5
+conf.py	../docs/conf.py	1;"	kind:file	line:1
+copyright	../docs/conf.py	/^copyright = u"2018, Alan Justino & Samuel Barbosa Neto"$/;"	kind:variable	line:51
+description	../setup.py	/^    description="Celery worker deployed as a Serverless application",$/;"	kind:variable	line:35
+entry_points	../setup.py	/^    entry_points={$/;"	kind:variable	line:36
+exclude_patterns	../docs/conf.py	/^exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']$/;"	kind:variable	line:73
+extensions	../docs/conf.py	/^extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode']$/;"	kind:variable	line:35
+find_packages	../setup.py	/^from setuptools import setup, find_packages$/;"	kind:namespace	line:6
+history	../setup.py	/^    history = history_file.read()$/;"	kind:variable	line:12
+html_static_path	../docs/conf.py	/^html_static_path = ['_static']$/;"	kind:variable	line:98
+html_theme	../docs/conf.py	/^html_theme = 'alabaster'$/;"	kind:variable	line:87
+htmlhelp_basename	../docs/conf.py	/^htmlhelp_basename = 'celery_worker_serverlessdoc'$/;"	kind:variable	line:104
+include_package_data	../setup.py	/^    include_package_data=True,$/;"	kind:variable	line:44
+install_requires	../setup.py	/^    install_requires=requirements,$/;"	kind:variable	line:41
+keywords	../setup.py	/^    keywords='celery_worker_serverless',$/;"	kind:variable	line:45
+language	../docs/conf.py	/^language = None$/;"	kind:variable	line:68
+latex_documents	../docs/conf.py	/^latex_documents = [$/;"	kind:variable	line:130
+latex_elements	../docs/conf.py	/^latex_elements = {$/;"	kind:variable	line:109
+license	../setup.py	/^    license="Apache Software License 2.0",$/;"	kind:variable	line:42
+long_description	../setup.py	/^    long_description=readme + '\\n\\n' + history,$/;"	kind:variable	line:43
+main	../celery_worker_serverless/cli.py	/^def main(args=None):$/;"	kind:function	line:9
+man_pages	../docs/conf.py	/^man_pages = [$/;"	kind:variable	line:141
+master_doc	../docs/conf.py	/^master_doc = 'index'$/;"	kind:variable	line:47
+name	../setup.py	/^    name='celery_worker_serverless',$/;"	kind:variable	line:46
+os	../docs/conf.py	/^import os$/;"	kind:namespace	line:21
+packages	../setup.py	/^    packages=find_packages(include=['celery_worker_serverless']),$/;"	kind:variable	line:47
+project	../docs/conf.py	/^project = u'celery-worker-serverless'$/;"	kind:variable	line:50
+pygments_style	../docs/conf.py	/^pygments_style = 'sphinx'$/;"	kind:variable	line:76
+pytest	../tests/test_celery_worker_serverless.py	/^import pytest$/;"	kind:namespace	line:6
+readme	../setup.py	/^    readme = readme_file.read()$/;"	kind:variable	line:9
+release	../docs/conf.py	/^release = celery_worker_serverless.__version__$/;"	kind:variable	line:61
+response	../tests/test_celery_worker_serverless.py	/^def response():$/;"	kind:function	line:15
+setup	../setup.py	/^from setuptools import setup, find_packages$/;"	kind:namespace	line:6
+setup.py	../setup.py	1;"	kind:file	line:1
+setup_requirements	../setup.py	/^setup_requirements = ['pytest-runner', ]$/;"	kind:variable	line:16
+setup_requires	../setup.py	/^    setup_requires=setup_requirements,$/;"	kind:variable	line:48
+source_suffix	../docs/conf.py	/^source_suffix = '.rst'$/;"	kind:variable	line:44
+sys	../celery_worker_serverless/cli.py	/^import sys$/;"	kind:namespace	line:4
+sys	../docs/conf.py	/^import sys$/;"	kind:namespace	line:22
+templates_path	../docs/conf.py	/^templates_path = ['_templates']$/;"	kind:variable	line:38
+test_celery_worker_serverless.py	../tests/test_celery_worker_serverless.py	1;"	kind:file	line:1
+test_command_line_interface	../tests/test_celery_worker_serverless.py	/^def test_command_line_interface():$/;"	kind:function	line:30
+test_content	../tests/test_celery_worker_serverless.py	/^def test_content(response):$/;"	kind:function	line:24
+test_requirements	../setup.py	/^test_requirements = ['pytest', ]$/;"	kind:variable	line:18
+test_suite	../setup.py	/^    test_suite='tests',$/;"	kind:variable	line:49
+tests_require	../setup.py	/^    tests_require=test_requirements,$/;"	kind:variable	line:50
+texinfo_documents	../docs/conf.py	/^texinfo_documents = [$/;"	kind:variable	line:153
+todo_include_todos	../docs/conf.py	/^todo_include_todos = False$/;"	kind:variable	line:79
+url	../setup.py	/^    url='https:\/\/github.com\/alanjds\/celery_worker_serverless',$/;"	kind:variable	line:51
+version	../docs/conf.py	/^version = celery_worker_serverless.__version__$/;"	kind:variable	line:59
+version	../setup.py	/^    version='0.1.0',$/;"	kind:variable	line:52
+zip_safe	../setup.py	/^    zip_safe=False,$/;"	kind:variable	line:53
