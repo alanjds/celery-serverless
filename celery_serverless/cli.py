@@ -13,10 +13,6 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
-CONTEXT_SETTINGS = dict(
-    allow_interspersed_args=True,
-)
-
 
 def fix_celery_command_name(ctx, param, value):
     if ctx.info_name == 'celery':
@@ -41,7 +37,7 @@ def click_handle_celery_options(fn):
 
 
 ## TODO: Handle the `celery serverless --help` call
-@click.command(context_settings=CONTEXT_SETTINGS)
+@click.command()
 @click_handle_celery_options
 @click.pass_context
 def serverless(ctx, *args, **kwargs):
@@ -58,7 +54,7 @@ class MainCommand(Command):
 
     def run(self, *args, **kwargs):
         logger.debug('MainCommand:run:\n\tself: %s \n\targs: %s \n\tkwargs: %s \n' % (self, args, kwargs))
-        sys.exit(serverless.main(obj=kwargs, **CONTEXT_SETTINGS))
+        sys.exit(serverless.main(obj=kwargs))
 
 
 main = serverless
