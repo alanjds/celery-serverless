@@ -3,6 +3,9 @@
 """Console script for celery_worker_serverless."""
 import logging
 import sys
+import functools
+import argparse
+
 import click
 from celery.bin.base import Command
 
@@ -11,14 +14,35 @@ logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
 CONTEXT_SETTINGS = dict(
-    allow_extra_args=True,
     allow_interspersed_args=True,
-    ignore_unknown_options=True,
 )
+
+
+def fix_celery_command_name(ctx, param, value):
+    if ctx.info_name == 'celery':
+        return value[1:]    # wipe the subcommand wrongly detected as extra argument
+    return value
+
+
+def click_handle_celery_options(fn):
+    """Handle the Celery default options properly, not on ctx.obj"""
+    @click.option('-A', '--app')
+    @click.option('-b', '--broker')
+    @click.option('--loader')
+    @click.option('--config')
+    @click.option('--workdir')
+    @click.option('--no-color', '-C')
+    @click.option('--quiet', '-q')
+    @click.argument('extra', nargs=-1, callback=fix_celery_command_name)  # Extra arguments from Celery (not options)
+    @functools.wraps(fn)
+    def _fn(*args, **kwargs):
+        return fn(*args, **kwargs)
+    return _fn
 
 
 ## TODO: Handle the `celery serverless --help` call
 @click.command(context_settings=CONTEXT_SETTINGS)
+@click_handle_celery_options
 @click.pass_context
 def serverless(ctx, *args, **kwargs):
     logger.debug('serverless:\n\tctx: %s \n\targs: %s \n\tkwargs: %s \n\tctx.obj: %s\n', ctx, args, kwargs, ctx.obj)
@@ -29,11 +53,12 @@ def serverless(ctx, *args, **kwargs):
 
 class MainCommand(Command):
     def add_arguments(self, parser):
-        parser.add_argument('options', nargs='?')   # catch-all to let Click handle the meat
+        parser.add_argument('options', nargs='*')   # catch-all to let Click handle the meat
+        # parser.add_argument('--spam', nargs='?')
 
     def run(self, *args, **kwargs):
         logger.debug('MainCommand:run:\n\tself: %s \n\targs: %s \n\tkwargs: %s \n' % (self, args, kwargs))
-        sys.exit(serverless.main(standalone_mode=False, obj=kwargs, **CONTEXT_SETTINGS))
+        sys.exit(serverless.main(obj=kwargs, **CONTEXT_SETTINGS))
 
 
 main = serverless
