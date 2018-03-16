@@ -1,16 +1,16 @@
-========================
-celery-worker-serverless
-========================
+=================
+celery-serverless
+=================
 
 
-.. image:: https://img.shields.io/pypi/v/celery_worker_serverless.svg
-        :target: https://pypi.python.org/pypi/celery_worker_serverless
+.. image:: https://img.shields.io/pypi/v/celery_serverless.svg
+        :target: https://pypi.python.org/pypi/celery_serverless
 
-.. image:: https://img.shields.io/travis/alanjds/celery_worker_serverless.svg
-        :target: https://travis-ci.org/alanjds/celery_worker_serverless
+.. image:: https://img.shields.io/travis/alanjds/celery_serverless.svg
+        :target: https://travis-ci.org/alanjds/celery_serverless
 
-.. image:: https://readthedocs.org/projects/celery-worker-serverless/badge/?version=latest
-        :target: https://celery-worker-serverless.readthedocs.io/en/latest/?badge=latest
+.. image:: https://readthedocs.org/projects/celery-serverless/badge/?version=latest
+        :target: https://celery-serverless.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
 
@@ -20,7 +20,7 @@ Celery worker deployed as a Serverless application
 
 
 * Free software: Apache Software License 2.0
-* Documentation: https://celery-worker-serverless.readthedocs.io.
+* Documentation: https://celery-serverless.readthedocs.io.
 
 
 Features
