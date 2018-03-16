@@ -31,8 +31,8 @@ def click_handle_celery_options(fn):
     @click.option('--loader')
     @click.option('--config')
     @click.option('--workdir')
-    @click.option('--no-color', '-C')
-    @click.option('--quiet', '-q')
+    @click.option('--no-color', '-C', is_flag=True)
+    @click.option('--quiet', '-q', is_flag=True)
     @click.argument('extra', nargs=-1, callback=fix_celery_command_name)  # Extra arguments from Celery (not options)
     @functools.wraps(fn)
     def _fn(*args, **kwargs):
