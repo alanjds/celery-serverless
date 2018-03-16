@@ -32,7 +32,10 @@ setup(
     description="Celery worker deployed as a Serverless application",
     entry_points={
         'console_scripts': [
-            'celery_worker_serverless=celery_worker_serverless.cli:main',
+            'celery-serverless=celery_worker_serverless.cli:main',
+        ],
+        'celery.commands': [
+            'serverless = celery_worker_serverless.cli:MainCommand',
         ],
     },
     install_requires=requirements,
