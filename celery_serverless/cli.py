@@ -9,6 +9,7 @@ import click
 from celery.bin.base import Command
 
 from .cli_utils import click_handle_celery_options
+from . import deployer
 
 
 logging.basicConfig()
@@ -39,11 +40,16 @@ def _serverless(ctx, *args, **kwargs):
 @serverless.command()
 @click_handle_celery_options
 @click.pass_context
-def serverless(ctx, *args, **kwargs):
-    logger.debug('serverless:\n\tctx: %s \n\targs: %s \n\tkwargs: %s \n\tctx.obj: %s\n', ctx, args, kwargs, ctx.obj)
-    click.echo("Replace this message by putting your code into "
-               "celery_worker_serverless.cli.main")
-    click.echo("See click documentation at http://click.pocoo.org/")
+def deploy(ctx, *args, **kwargs):
+    logger.debug('deploy:\n\tctx: %s \n\targs: %s \n\tkwargs: %s \n\tctx.obj: %s\n', ctx, args, kwargs, ctx.obj)
+
+    stdout_text = click.get_text_stream('stdout')
+    stderr_text = click.get_text_stream('stderr')
+
+    sys.exit(deployer.deploy(
+        stdout=stdout_text,
+        stderr=stderr_text,
+    ))
 
 
 class MainCommand(Command):
