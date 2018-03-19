@@ -8,7 +8,6 @@ from .cli_utils import run
 
 def deploy():
     command = ['serverless', 'deploy', '--verbose', '--color']
-    import time
     for line, retcode in run(command): #, shell=True):
         click.echo(line, nl=False)
     return retcode
