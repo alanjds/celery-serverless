@@ -42,14 +42,7 @@ def _serverless(ctx, *args, **kwargs):
 @click.pass_context
 def deploy(ctx, *args, **kwargs):
     logger.debug('deploy:\n\tctx: %s \n\targs: %s \n\tkwargs: %s \n\tctx.obj: %s\n', ctx, args, kwargs, ctx.obj)
-
-    stdout_text = click.get_text_stream('stdout')
-    stderr_text = click.get_text_stream('stderr')
-
-    sys.exit(deployer.deploy(
-        stdout=stdout_text,
-        stderr=stderr_text,
-    ))
+    sys.exit(deployer.deploy())
 
 
 class MainCommand(Command):

@@ -6,7 +6,7 @@ import click
 from .cli_utils import run
 
 
-def deploy(stdout=sys.stdout, stderr=sys.stderr):
+def deploy():
     command = ['serverless', 'deploy', '--verbose', '--color']
     import time
     for line, retcode in run(command): #, shell=True):
