@@ -41,8 +41,14 @@ def _serverless(ctx, *args, **kwargs):
 @click_handle_celery_options
 @click.pass_context
 def deploy(ctx, *args, **kwargs):
-    logger.debug('deploy:\n\tctx: %s \n\targs: %s \n\tkwargs: %s \n\tctx.obj: %s\n', ctx, args, kwargs, ctx.obj)
     sys.exit(deployer.deploy())
+
+
+@serverless.command()
+@click_handle_celery_options
+@click.pass_context
+def init(ctx, *args, **kwargs):
+    sys.exit(deployer.init_serverless())
 
 
 class MainCommand(Command):
