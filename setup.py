@@ -8,7 +8,10 @@ from setuptools import setup, find_packages
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-requirements = ['Click>=6.0', ]
+requirements = [
+    'Click>=6.0',
+    'celery~=4.1.0',
+]
 
 setup_requirements = ['pytest-runner', ]
 
