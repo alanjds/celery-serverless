@@ -40,6 +40,10 @@ def click_handle_celery_options(accept_extra=True):
 
 
 def run(command, *args, **kwargs):
+    # Accepts ['ls', '-la'] and 'ls -la'
+    if isinstance(command, (type(b''), type(u''))):
+        command = shlex.split(command)
+
     p = subprocess.Popen(command,
                          stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT,
