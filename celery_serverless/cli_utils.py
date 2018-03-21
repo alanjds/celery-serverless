@@ -1,6 +1,7 @@
 #coding: utf-8
 import functools
 import subprocess
+import shlex
 
 import click
 
@@ -43,5 +44,7 @@ def run(command, *args, **kwargs):
                          stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT,
                          *args, **kwargs)
-    for line in iter(p.stdout.readline, b''):
-        yield (line, p.poll())  # (bytes, exitcode)
+    while p.poll() is None:
+        for line in iter(p.stdout.readline, b''):
+            yield (line, p.poll())  # (bytes, exitcode)
+    yield (b'', p.poll())
