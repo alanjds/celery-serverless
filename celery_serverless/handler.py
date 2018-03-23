@@ -4,12 +4,8 @@ import signal
 import json
 import logging
 
-import celery
 import celery.bin.celery
-from celery.signals import celeryd_init, task_prerun
-# from celery.worker import state as worker_state, control as worker_control
-
-workers = []
+from celery.signals import task_prerun
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
@@ -43,14 +39,6 @@ def _attach_hooks():
     - One to store the worker class after start
     - One to trigger stop getting tasks after the 1st, and shutdown when done
     """
-
-    @celeryd_init.connect()
-    def _store_worker(instance=None, *args, **kwargs):
-        logger.info('New worker detected: %s', instance)
-        logger.debug(args)
-        logger.debug(kwargs)
-        workers.append(instance)
-
     @task_prerun.connect
     def _shutdown_when_done(*args, **kwargs):
         # After got a task, trigger Ctrl+C
@@ -60,27 +48,8 @@ def _attach_hooks():
         os.kill(pid, signal.SIGINT)  # Trigger Ctrl+C behaviours
 
     # Return the hooks to be hold somewhere. Else it could be garbage collected
-    hooks = _store_worker, _shutdown_when_done
+    hooks = (_shutdown_when_done,)
     return hooks
-
-
-def _do_monitor(app):   # XXX: Not used. Will it be someday?
-    """Uses the gossip bus to react on my local worker events"""
-    import celery
-
-    app = celery.Celery()
-    control = app.control
-    inspector = app.control.inspect()
-
-    state = app.events.State()
-    with app.connection() as connection:
-        recv = app.events.Receiver(connection, handlers={
-            'task-received': stop_receiving,
-            'task-succeeded': kill_and_die,
-            'task-rejected': kill_and_die,
-            'task-revoked': kill_and_die,
-        })
-        recv.capture(limit=None, timeout=None, wakeup=True)
 
 
 def worker(event, context):
