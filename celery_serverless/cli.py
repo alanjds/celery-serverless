@@ -14,7 +14,7 @@ from . import deployer
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel('DEBUG')
+logger.setLevel('INFO')
 
 
 ## TODO: Handle the `celery serverless --help` call
