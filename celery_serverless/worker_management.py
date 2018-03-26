@@ -15,7 +15,6 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
         'celery',
         'worker',
         # '--app', 'project',
-        '--loglevel', 'debug',
         '--concurrency', '1',
         '--prefetch-multiplier', '1',
         '--without-gossip',
