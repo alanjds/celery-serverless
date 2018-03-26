@@ -31,7 +31,11 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None):
 
     logger.info('Starting the worker(s)')
     logger.debug('Command: %s', ' '.join(command_argv))
-    return celery.bin.celery.main(command_argv)  # will block.
+    try:
+        celery.bin.celery.main(command_argv)  # Will block until worker dies.
+    except SystemExit as e:  # Worker is dead.
+        return e
+    raise RuntimeError('Is the worker left running?')
 
 
 def shutdown_when_done(*args, **kwargs):
