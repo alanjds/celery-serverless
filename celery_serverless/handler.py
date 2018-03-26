@@ -7,7 +7,7 @@ except ImportError:
 import json
 import logging
 
-from .worker_management import spawn_worker, attach_hooks
+from celery_serverless.worker_management import spawn_worker, attach_hooks
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
