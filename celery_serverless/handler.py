@@ -1,4 +1,9 @@
 # coding: utf-8
+try:  # https://github.com/UnitedIncome/serverless-python-requirements#dealing-with-lambdas-size-limitations
+  import unzip_requirements
+except ImportError:
+  pass
+
 import json
 import logging
 
