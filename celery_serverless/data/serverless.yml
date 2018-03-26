@@ -31,7 +31,7 @@ functions:
 
 custom:
   pythonRequirements:
-    zip: true
+    zip: false
     # dockerizePip: true
     invalidateCaches: false
     pipCmdExtraArgs:
