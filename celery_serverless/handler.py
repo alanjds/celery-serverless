@@ -22,6 +22,7 @@ def worker(event, context):
     spawn_worker(
         softlimit=softlimit if softlimit > 5 else None,
         hardlimit=hardlimit if hardlimit > 5 else None,
+        loglevel='DEBUG',
     )  # Will block until one task got processed
 
     body = {

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
 
-def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None):
+def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, loglevel=None):
     command_argv = [
         'celery',
         'worker',
@@ -28,6 +28,8 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None):
         command_argv.extend(['--soft-time-limit', '%s' % softlimit])
     if hardlimit:
         command_argv.extend(['--time-limit', '%s' % hardlimit])
+    if loglevel:
+        command_argv.extend(['--loglevel', loglevel])
 
     logger.info('Starting the worker(s)')
     logger.debug('Command: %s', ' '.join(command_argv))
