@@ -14,7 +14,7 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
     command_argv = [
         'celery',
         'worker',
-        '--app', 'project',
+        # '--app', 'project',
         '--loglevel', 'debug',
         '--concurrency', '1',
         '--prefetch-multiplier', '1',
