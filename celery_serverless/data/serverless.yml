@@ -28,3 +28,17 @@ functions:
      - http:
          path: celery/worker
          method: post
+
+custom:
+  pythonRequirements:
+    zip: true
+    # dockerizePip: true
+    invalidateCaches: false
+    pipCmdExtraArgs:
+      - --cache-dir
+      - .requirements-cache
+
+package:
+  excludeDevDependencies: false
+  exclude:
+    - .requirements-cache/**

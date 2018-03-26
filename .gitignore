@@ -103,3 +103,7 @@ ENV/
 # Editors
 .pycharm
 .vscode
+
+# Serverless directories
+.serverless
+
