@@ -18,7 +18,7 @@ provider:
   runtime: python3.6
 
 functions:
-  worker:
+  celery_serverless_worker:
     handler: celery_serverless.handler_worker
 
     events:
