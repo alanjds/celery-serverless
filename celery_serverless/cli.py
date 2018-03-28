@@ -9,7 +9,7 @@ import click
 from celery.bin.base import Command
 
 from .cli_utils import click_handle_celery_options
-from . import deployer
+from . import deployer, invoker
 
 
 logging.basicConfig()
@@ -42,6 +42,18 @@ def _serverless(ctx, *args, **kwargs):
 @click.pass_context
 def deploy(ctx, *args, **kwargs):
     sys.exit(deployer.deploy())
+
+
+@serverless.command()
+@click_handle_celery_options
+@click.pass_context
+def invoke(ctx, *args, **kwargs):
+    try:
+        sys.exit(invoker.invoke_main())
+    except RuntimeError as e:
+        if isinstance(e, NotImplementedError):
+            raise
+        raise click.UsageError(str(e))
 
 
 @serverless.command()

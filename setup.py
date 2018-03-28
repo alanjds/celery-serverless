@@ -11,6 +11,7 @@ with open('README.rst') as readme_file:
 requirements = [
     'Click>=6.0',
     'celery~=4.1.0',
+    'ruamel.yaml~=0.15.37',
 ]
 
 setup_requirements = ['pytest-runner', ]
