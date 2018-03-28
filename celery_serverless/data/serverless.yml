@@ -19,7 +19,7 @@ provider:
 
 functions:
   worker:
-    handler: celery_serverless.handler.worker
+    handler: celery_serverless.handler_worker
 
     events:
 #      - s3: ${env:BUCKET}
