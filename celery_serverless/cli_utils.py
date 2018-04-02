@@ -2,8 +2,11 @@
 import functools
 import subprocess
 import shlex
+import logging
 
 import click
+
+logger = logging.getLogger(__name__)
 
 
 def fix_celery_command_name(ctx, param, value):
@@ -39,7 +42,8 @@ def click_handle_celery_options(accept_extra=True):
     return _decorator(func) if func else _decorator
 
 
-def run(command, *args, **kwargs):
+def run(command, out=None, *args, **kwargs):
+    logger.debug('run: %s', command)
     # Accepts ['ls', '-la'] and 'ls -la'
     if isinstance(command, (type(b''), type(u''))):
         command = shlex.split(command)
