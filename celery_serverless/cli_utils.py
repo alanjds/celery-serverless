@@ -54,5 +54,7 @@ def run(command, out=None, *args, **kwargs):
                          *args, **kwargs)
     while p.poll() is None:
         for line in iter(p.stdout.readline, b''):
+            if out:
+                out.write(line)
             yield (line, p.poll())  # (bytes, exitcode)
     yield (b'', p.poll())

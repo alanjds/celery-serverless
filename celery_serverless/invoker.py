@@ -1,5 +1,6 @@
 # coding: utf-8
 import os
+import io
 from pathlib import Path
 
 import click
@@ -42,7 +43,8 @@ def _invoke_serverless(config, local=False):
         command += ' local'
 
     command += ' --verbose --color --function %s' % name
-    for line, retcode in run(command):
+    sio = io.BytesIO()
+    for line, retcode in run(command, sio):
         click.echo(line, nl=False)
     if retcode != 0:
         raise RuntimeError('Command failed: %s' % command)
