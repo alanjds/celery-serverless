@@ -43,6 +43,9 @@ setup(
         ],
     },
     install_requires=requirements,
+    extras_require={
+        'boto3': ['boto3>=1.7.0'],
+    },
     license="Apache Software License 2.0",
     long_description=readme,
     include_package_data=True,

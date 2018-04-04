@@ -1,9 +1,26 @@
 # coding: utf-8
+import logging
 
 import click
 from celery_serverless.config import get_config
 
+
+logger = logging.getLogger(__name__)
+
+try:
+    import boto3
+    import botocore
+    try:
+        lambda_client = boto3.client('lambda')
+    except botocore.exceptions.NoRegionError:
+        logger.warning("'boto3' invoker cannot be used: please set a default region on serverless.yml")
+        lambda_client = None
+except ImportError:  # Boto3 is an optional extra on setup.py
+    lambda_client = None
+
 from .cli_utils import run
+
+
 
 CELERY_HANDLER_PATH = 'celery_serverless.handler_worker'
 
@@ -13,6 +30,7 @@ def invoke_main(strategy=''):
     if not strategy:
         strategy = _infer_strategy(config)
 
+    logger.info("Invoke strategy selected: '%s'", strategy)
     if strategy == 'serverless':
         invoker = _invoke_serverless
     elif strategy == 'boto3':
@@ -23,8 +41,11 @@ def invoke_main(strategy=''):
     return invoker(config)
 
 def _infer_strategy(config):
-    #if config['provider']['name'] == 'aws':
-    #    return 'boto3'
+    if config['provider']['name'] == 'aws':
+        if lambda_client:
+            return 'boto3'
+        else:
+            logger.warning("Extras 'boto3' not installed. Falling back to 'serverless' invoke strategy")
     return 'serverless'
 
 
