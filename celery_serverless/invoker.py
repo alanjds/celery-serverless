@@ -45,7 +45,7 @@ def _infer_strategy(config):
         if lambda_client:
             return 'boto3'
         else:
-            logger.warning("Extras 'boto3' not installed. Falling back to 'serverless' invoke strategy")
+            logger.warning("Invoke strategy 'boto3' could not be used. Falling back to 'serverless'")
     return 'serverless'
 
 
