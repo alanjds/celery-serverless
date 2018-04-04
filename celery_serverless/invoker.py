@@ -1,10 +1,7 @@
 # coding: utf-8
-import os
-from pathlib import Path
 
 import click
-from ruamel.yaml import YAML
-yaml = YAML()
+from celery_serverless.config import get_config
 
 from .cli_utils import run
 
@@ -12,11 +9,7 @@ CELERY_HANDLER_PATH = 'celery_serverless.handler_worker'
 
 
 def invoke_main(strategy=''):
-    local_serverless = './serverless.yml'
-    if not os.path.exists(local_serverless):
-        raise RuntimeError("No serverless.yml detected. Please run 'celery serverless init' to create one")
-    config = yaml.load(Path(local_serverless))
-
+    config = get_config()
     if not strategy:
         strategy = _infer_strategy(config)
 
