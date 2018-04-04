@@ -12,7 +12,7 @@ def trigger_invoke(task, *args, **kwargs):
 
 
 class TriggerAfterQueueTask(Task):
-    """Does the standart Task enqueue, then invokes the Serverless Function"""
+    """Do the standart Task enqueue, then invokes the Serverless Function"""
     def apply_async(self, *args, **kwargs):
         result = super(__class__, self).apply_async(self, *args, **kwargs)
         trigger_invoke(self, *args, **kwargs)
@@ -20,7 +20,7 @@ class TriggerAfterQueueTask(Task):
 
 
 class TriggerBeforeQueueTask(Task):
-    """Invokes the Serverless Function, then does the standard Task enqueue"""
+    """Invokes the Serverless Function, then do the standard Task enqueue"""
     def apply_async(self, *args, **kwargs):
         trigger_invoke(self, *args, **kwargs)
         return super(__class__, self).apply_async(self, *args, **kwargs)
