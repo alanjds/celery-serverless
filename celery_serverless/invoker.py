@@ -1,5 +1,6 @@
 # coding: utf-8
 import logging
+import io
 
 import click
 from celery_serverless.config import get_config
@@ -56,7 +57,8 @@ def _invoke_serverless(config, local=False):
         command += ' local'
 
     command += ' --verbose --color --function %s' % name
-    for line, retcode in run(command):
+    sio = io.BytesIO()
+    for line, retcode in run(command, sio):
         click.echo(line, nl=False)
     if retcode != 0:
         raise RuntimeError('Command failed: %s' % command)
