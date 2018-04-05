@@ -12,6 +12,7 @@ requirements = [
     'Click>=6.0',
     'celery~=4.1.0',
     'ruamel.yaml~=0.15.37',
+    'dirtyjson==1.0.7',
 ]
 
 setup_requirements = ['pytest-runner', ]

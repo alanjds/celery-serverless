@@ -1,10 +1,14 @@
 # coding: utf-8
+from __future__ import unicode_literals, absolute_import
+
 import functools
 import logging
 import codecs
+import json
 from pprint import pformat
 from io import BytesIO
 
+import dirtyjson
 import click
 from celery_serverless.config import get_config
 
@@ -42,7 +46,14 @@ def invoke_main(strategy=''):
     else:
         raise NotImplementedError("Could not find a way to invoke via '%s' strategy" % strategy)
 
-    return invoker(config)
+    try:
+        logs = invoker(config)  # Should raise exception on some problem
+    except RuntimeError as err:
+        if logger.getEffectiveLevel() <= logging.INFO:
+            logger.info('Invocation failed via "%s": %s', strategy, err.details)
+        raise
+    return True
+
 
 def _infer_strategy(config):
     if config['provider']['name'] == 'aws':
@@ -60,12 +71,25 @@ def _invoke_serverless(config, local=False):
         command += ' local'
 
     logger.debug("Invoking via 'serverless'")
-    command += ' --log --verbose --color --function %s' % name
-    sio = BytesIO()
-    for line, retcode in run(command, sio):
+    command += ' --log --verbose --function %s' % name
+    output = BytesIO()
+    for line, retcode in run(command, output):
         click.echo(line, nl=False)
+
+    output.seek(0)
     if retcode != 0:
-        raise RuntimeError('Command failed: %s' % command)
+        error = RuntimeError('Command failed: %s' % command)
+
+        details = dirtyjson.loads(output.read().decode())
+        if isinstance(details, dict):
+            details = dict(details)
+        elif isinstance(details, list):
+            retails = list(details)
+
+        error.logs = output
+        error.details = details
+        raise error
+    return output
 
 
 def _invoke_boto3(config):
@@ -84,8 +108,20 @@ def _invoke_boto3(config):
         log_output = pformat(response)
         logger.debug("Invocation response from 'boto3':\n%s", response)
 
-    output = codecs.decode(response['LogResult'].encode('utf-8'), 'base64').decode('utf-8')
-    logger.debug("Invocation logs from 'boto3':\n%s", output)
+    output = BytesIO(codecs.decode(response['LogResult'].encode(), 'base64'))
+
+    if logger.getEffectiveLevel() <= logging.INFO:
+        output.seek(0)
+        logger.info("Invocation logs from 'boto3':\n%s", output.read().decode())
+
+    if 'FunctionError' in response:
+        output.seek(0)
+        error = RuntimeError('Invocation failed on AWS Lambda: %s' % lambda_arn)
+        error.logs = output
+        error.details = json.load(response['Payload'])
+        raise error
+
+    output.seek(0)
     return output
 
 
