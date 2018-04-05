@@ -76,9 +76,9 @@ def _invoke_serverless(config, local=False):
     for line, retcode in run(command, output):
         pass    # click.echo(line, nl=False)
 
-    if logger.getEffectiveLevel() <= logging.INFO:
+    if logger.getEffectiveLevel() <= logging.DEBUG:
         output.seek(0)
-        logger.info("Invocation logs from 'serverless':\n%s", output.read().decode())
+        logger.debug("Invocation logs from 'serverless':\n%s", output.read().decode())
 
     if retcode != 0:
         error = RuntimeError('Invocation failed on Serverless: %s' % command)
@@ -115,9 +115,9 @@ def _invoke_boto3(config):
 
     output = BytesIO(codecs.decode(response['LogResult'].encode(), 'base64'))
 
-    if logger.getEffectiveLevel() <= logging.INFO:
+    if logger.getEffectiveLevel() <= logging.DEBUG:
         output.seek(0)
-        logger.info("Invocation logs from 'boto3':\n%s", output.read().decode())
+        logger.debug("Invocation logs from 'boto3':\n%s", output.read().decode())
 
     if 'FunctionError' in response:
         output.seek(0)
