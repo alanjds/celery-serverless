@@ -1,6 +1,6 @@
 # coding: utf-8
 import logging
-import io
+from io import BytesIO
 
 import click
 from celery_serverless.config import get_config
@@ -51,13 +51,14 @@ def _infer_strategy(config):
 
 
 def _invoke_serverless(config, local=False):
-    name = _get_lambda_name(config)
+    name = _get_serverless_name(config)
     command = 'serverless invoke'
     if local:
         command += ' local'
 
-    command += ' --verbose --color --function %s' % name
-    sio = io.BytesIO()
+    logger.debug("Invoking via 'serverless'")
+    command += ' --log --verbose --color --function %s' % name
+    sio = BytesIO()
     for line, retcode in run(command, sio):
         click.echo(line, nl=False)
     if retcode != 0:
@@ -68,7 +69,7 @@ def _invoke_boto3(config):
     raise NotImplementedError('Use boto3 to invoke AWS Lambda')
 
 
-def _get_lambda_name(config):
+def _get_serverless_name(config):
     for name, options in config['functions'].items():
         if options.get('handler') == CELERY_HANDLER_PATH:
             return name
