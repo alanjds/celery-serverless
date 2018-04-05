@@ -74,21 +74,26 @@ def _invoke_serverless(config, local=False):
     command += ' --log --verbose --function %s' % name
     output = BytesIO()
     for line, retcode in run(command, output):
-        click.echo(line, nl=False)
+        pass    # click.echo(line, nl=False)
 
-    output.seek(0)
+    if logger.getEffectiveLevel() <= logging.INFO:
+        output.seek(0)
+        logger.info("Invocation logs from 'serverless':\n%s", output.read().decode())
+
     if retcode != 0:
-        error = RuntimeError('Command failed: %s' % command)
+        error = RuntimeError('Invocation failed on Serverless: %s' % command)
 
+        output.seek(0)
         details = dirtyjson.loads(output.read().decode())
         if isinstance(details, dict):
             details = dict(details)
         elif isinstance(details, list):
-            retails = list(details)
+            details = list(details)
 
         error.logs = output
         error.details = details
         raise error
+    output.seek(0)
     return output
 
 
