@@ -1,5 +1,8 @@
 # coding: utf-8
+import functools
 import logging
+import codecs
+from pprint import pformat
 from io import BytesIO
 
 import click
@@ -66,7 +69,24 @@ def _invoke_serverless(config, local=False):
 
 
 def _invoke_boto3(config):
-    raise NotImplementedError('Use boto3 to invoke AWS Lambda')
+    lambda_arn = _get_awslambda_arn(CELERY_HANDLER_PATH)
+    logger.debug("Invoking via 'boto3'")
+    response = lambda_client.invoke(
+        FunctionName=lambda_arn,
+        InvocationType='RequestResponse', # 'RequestResponse'|'Event'|'DryRun'
+        LogType='Tail',  # 'None'|'Tail'
+        #ClientContext='string',
+        #Payload=b'bytes'|file,
+        #Qualifier='$LATEST',  # 'string'
+    )
+
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        log_output = pformat(response)
+        logger.debug("Invocation response from 'boto3':\n%s", response)
+
+    output = codecs.decode(response['LogResult'].encode('utf-8'), 'base64').decode('utf-8')
+    logger.debug("Invocation logs from 'boto3':\n%s", output)
+    return output
 
 
 def _get_serverless_name(config):
@@ -78,3 +98,10 @@ def _get_serverless_name(config):
         "Handler '%s' not found on serverless.yml.\n"
         "Please fix it or run 'celery serverless init' to recreate one"
     ) % CELERY_HANDLER_PATH)
+
+
+@functools.lru_cache(8)
+def _get_awslambda_arn(lambda_name):
+    for func in lambda_client.list_functions().get('Functions', []):
+        if func['Handler'] == lambda_name:
+            return func['FunctionArn']
