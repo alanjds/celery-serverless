@@ -29,7 +29,6 @@ except ImportError:  # Boto3 is an optional extra on setup.py
 from .cli_utils import run
 
 
-
 CELERY_HANDLER_PATH = 'celery_serverless.handler_worker'
 
 
