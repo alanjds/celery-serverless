@@ -18,8 +18,8 @@ provider:
   runtime: python3.6
 
 functions:
-  worker:
-    handler: celery_serverless.handler.worker
+  celery_serverless_worker:
+    handler: celery_serverless.handler_worker
 
     events:
 #      - s3: ${env:BUCKET}
@@ -31,7 +31,7 @@ functions:
 
 custom:
   pythonRequirements:
-    zip: true
+    zip: false
     # dockerizePip: true
     invalidateCaches: false
     pipCmdExtraArgs:
