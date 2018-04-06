@@ -4,13 +4,37 @@ try:  # https://github.com/UnitedIncome/serverless-python-requirements#dealing-w
 except ImportError:
   pass
 
-import json
+import os
+import importlib
 import logging
-
-from celery_serverless.worker_management import spawn_worker, attach_hooks
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
+
+
+def _maybe_call_hook(envname, locals={}):
+    func_path = os.environ.get(envname)
+    logger.debug("Trying the hook %s: '%s'", envname, func_path or '(not set)')
+    func = _import_callable(func_path)
+    return func(**locals) if func else None
+
+
+def _import_callable(name):
+    result = None
+    if name:
+        module_name, split, callable_name = name.rpartition(':')
+        module = importlib.import_module(module_name)
+        result = getattr(module, callable_name)
+    return result if callable(result) else None
+
+
+_pre_warmup_envvar = 'CELERY_SERVERLESS_PRE_WARMUP'
+_post_warmup_envvar = 'CELERY_SERVERLESS_POST_WARMUP'
+_pre_handler_envvar = 'CELERY_SERVERLESS_PRE_HANDLER'
+_post_handler_envvar = 'CELERY_SERVERLESS_POST_HANDLER'
+
+import json
+from celery_serverless.worker_management import spawn_worker, attach_hooks
 
 hooks = []
 
