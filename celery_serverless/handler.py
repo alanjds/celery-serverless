@@ -33,35 +33,46 @@ _post_warmup_envvar = 'CELERY_SERVERLESS_POST_WARMUP'
 _pre_handler_envvar = 'CELERY_SERVERLESS_PRE_HANDLER'
 _post_handler_envvar = 'CELERY_SERVERLESS_POST_HANDLER'
 
+### 1st hook call
+_maybe_call_hook(_pre_warmup_envvar, locals())
+
 import json
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 
 hooks = []
+
+### 2nd hook call
+_maybe_call_hook(_post_warmup_envvar, locals())
 
 
 def worker(event, context):
     global hooks
 
     try:
-        remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
-    except Exception as e:
-        logger.exception('Could not got remaining_seconds. Is the context right?')
-        remaining_seconds = 5 * 60 # 5 minutes by default
+        ### 3rd hook call
+        _maybe_call_hook(_pre_handler_envvar, locals())
 
-    softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
-    hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
+        try:
+            remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
+        except Exception as e:
+            logger.exception('Could not got remaining_seconds. Is the context right?')
+            remaining_seconds = 5 * 60 # 5 minutes by default
 
-    if not hooks:
-        hooks = attach_hooks()
+        softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
+        hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
 
-    spawn_worker(
-        softlimit=softlimit if softlimit > 5 else None,
-        hardlimit=hardlimit if hardlimit > 5 else None,
-        loglevel='DEBUG',
-    )  # Will block until one task got processed
+        if not hooks:
+            hooks = attach_hooks()
 
-    body = {
-        "message": "Celery worker worked, lived, and died.",
-    }
+        spawn_worker(
+            softlimit=softlimit if softlimit > 5 else None,
+            hardlimit=hardlimit if hardlimit > 5 else None,
+            loglevel='DEBUG',
+        )  # Will block until one task got processed
 
-    return {"statusCode": 200, "body": json.dumps(body)}
+        body = {
+            "message": "Celery worker worked, lived, and died.",
+        }
+        return {"statusCode": 200, "body": json.dumps(body)}
+    finally:
+        _maybe_call_hook(_post_handler_envvar, locals())
