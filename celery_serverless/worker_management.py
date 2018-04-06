@@ -61,7 +61,7 @@ def attach_hooks():
     Register the needed hooks:
     - One to trigger stop getting tasks after the 1st, and shutdown when done
     """
-    logger.debug('Attaching hooks')
+    logger.debug('Attaching Celery hooks')
 
     # Return the hooks to be hold somewhere. Else it could be garbage collected
     hooks = []
