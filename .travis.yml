@@ -23,5 +23,5 @@ deploy:
     secure: PLEASE_REPLACE_ME
   on:
     tags: true
-    repo: alanjds/celery_worker_serverless
+    repo: alanjds/celery-serverless
     python: 3.6
