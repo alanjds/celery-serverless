@@ -3,6 +3,7 @@
 
 """The setup script."""
 
+import sys
 from setuptools import setup, find_packages
 
 with open('README.rst') as readme_file:
@@ -14,9 +15,14 @@ requirements = [
     'ruamel.yaml~=0.15.37',
 ]
 
-setup_requirements = ['pytest-runner', ]
+setup_requirements = []
 
 test_requirements = ['pytest', 'coverage']
+
+needs_pytest = {'pytest', 'test', 'ptr'}.intersection(sys.argv)
+if needs_pytest:
+    setup_requirements += ['pytest-runner']
+
 
 setup(
     author="Alan Justino & Samuel Barbosa Neto",
