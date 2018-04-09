@@ -28,7 +28,6 @@ def init_serverless():
         for line, retcode in run(command):
             click.echo(line, nl=False)
         if retcode != 0:
-            import wdb; wdb.set_trace()
             raise RuntimeError('Command failed: %s' % command)
     return retcode
 

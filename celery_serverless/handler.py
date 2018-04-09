@@ -7,13 +7,17 @@ except ImportError:
 import json
 import logging
 
-from .worker_management import spawn_worker, attach_hooks
+from celery_serverless.worker_management import spawn_worker, attach_hooks
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
+hooks = []
+
 
 def worker(event, context):
+    global hooks
+
     try:
         remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
     except Exception as e:
@@ -23,7 +27,9 @@ def worker(event, context):
     softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
     hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
 
-    hooks = attach_hooks()
+    if not hooks:
+        hooks = attach_hooks()
+
     spawn_worker(
         softlimit=softlimit if softlimit > 5 else None,
         hardlimit=hardlimit if hardlimit > 5 else None,

@@ -1,4 +1,4 @@
-Welcome to celery-worker-serverless's documentation!
+Welcome to celery-serverless's documentation!
 ======================================
 
 .. toctree::
