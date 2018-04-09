@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = python -msphinx
-SPHINXPROJ    = celery_worker_serverless
+SPHINXPROJ    = celery_serverless
 SOURCEDIR     = .
 BUILDDIR      = _build
 
