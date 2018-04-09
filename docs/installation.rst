@@ -8,13 +8,13 @@ Installation
 Stable release
 --------------
 
-To install celery-worker-serverless, run this command in your terminal:
+To install celery-serverless, run this command in your terminal:
 
 .. code-block:: console
 
-    $ pip install celery_worker_serverless
+    $ pip install celery_serverless
 
-This is the preferred method to install celery-worker-serverless, as it will always install the most recent stable release.
+This is the preferred method to install celery-serverless, as it will always install the most recent stable release.
 
 If you don't have `pip`_ installed, this `Python installation guide`_ can guide
 you through the process.
@@ -26,19 +26,19 @@ you through the process.
 From sources
 ------------
 
-The sources for celery-worker-serverless can be downloaded from the `Github repo`_.
+The sources for celery-serverless can be downloaded from the `Github repo`_.
 
 You can either clone the public repository:
 
 .. code-block:: console
 
-    $ git clone git://github.com/alanjds/celery_worker_serverless
+    $ git clone git://github.com/alanjds/celery_serverless
 
 Or download the `tarball`_:
 
 .. code-block:: console
 
-    $ curl  -OL https://github.com/alanjds/celery_worker_serverless/tarball/master
+    $ curl  -OL https://github.com/alanjds/celery_serverless/tarball/master
 
 Once you have a copy of the source, you can install it with:
 
@@ -47,5 +47,5 @@ Once you have a copy of the source, you can install it with:
     $ python setup.py install
 
 
-.. _Github repo: https://github.com/alanjds/celery_worker_serverless
-.. _tarball: https://github.com/alanjds/celery_worker_serverless/tarball/master
+.. _Github repo: https://github.com/alanjds/celery_serverless
+.. _tarball: https://github.com/alanjds/celery_serverless/tarball/master
