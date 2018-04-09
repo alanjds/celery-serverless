@@ -8,6 +8,9 @@ python:
 # Command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install: pip install -U tox-travis
 
+services:
+  - redis-server
+
 # Command to run tests, e.g. python setup.py test
 script: tox
 
