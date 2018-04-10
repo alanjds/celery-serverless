@@ -72,9 +72,8 @@ class Invoker(object):
 
         logger.debug("Invoking via 'serverless'")
         command += ' --log --verbose --function %s' % name
-        output = BytesIO()
-        for line, retcode in run(command, output):
-            pass    # click.echo(line, nl=False)
+
+        output, retcode = next(run(command, output='oneshot'))
 
         if logger.getEffectiveLevel() <= logging.DEBUG:
             output.seek(0)
