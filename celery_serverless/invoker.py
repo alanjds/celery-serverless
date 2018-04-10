@@ -6,7 +6,6 @@ import logging
 import codecs
 import json
 from pprint import pformat
-from io import BytesIO
 
 import dirtyjson
 import click
@@ -75,15 +74,12 @@ class Invoker(object):
 
         output, retcode = next(run(command, output='oneshot'))
 
-        if logger.getEffectiveLevel() <= logging.DEBUG:
-            output.seek(0)
-            logger.debug("Invocation logs from 'serverless':\n%s", output.read().decode())
+        logger.debug("Invocation logs from 'serverless':\n%s", output)
 
         if retcode != 0:
             error = RuntimeError('Invocation failed on Serverless: %s' % command)
 
-            output.seek(0)
-            details = dirtyjson.loads(output.read().decode())
+            details = dirtyjson.loads(output)
             if isinstance(details, dict):
                 details = dict(details)
             elif isinstance(details, list):
@@ -92,7 +88,6 @@ class Invoker(object):
             error.logs = output
             error.details = details
             raise error
-        output.seek(0)
         return output
 
 
@@ -112,20 +107,17 @@ class Invoker(object):
             log_output = pformat(response)
             logger.debug("Invocation response from 'boto3':\n%s", response)
 
-        output = BytesIO(codecs.decode(response['LogResult'].encode(), 'base64'))
+        output = codecs.decode(response['LogResult'].encode(), 'base64')
 
         if logger.getEffectiveLevel() <= logging.DEBUG:
-            output.seek(0)
-            logger.debug("Invocation logs from 'boto3':\n%s", output.read().decode())
+            logger.debug("Invocation logs from 'boto3':\n%s", output)
 
         if 'FunctionError' in response:
-            output.seek(0)
             error = RuntimeError('Invocation failed on AWS Lambda: %s' % lambda_arn)
             error.logs = output
             error.details = json.load(response['Payload'])
             raise error
 
-        output.seek(0)
         return output
 
 
