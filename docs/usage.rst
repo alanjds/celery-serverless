@@ -2,6 +2,6 @@
 Usage
 =====
 
-To use celery-worker-serverless in a project::
+To use celery-serverless in a project::
 
-    import celery_worker_serverless
+    import celery_serverless
