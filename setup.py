@@ -13,6 +13,7 @@ requirements = [
     'Click>=6.0',
     'celery~=4.1.0',
     'ruamel.yaml~=0.15.37',
+    'dirtyjson==1.0.7',
 ]
 
 setup_requirements = []
@@ -46,6 +47,9 @@ setup(
         ],
     },
     install_requires=requirements,
+    extras_require={
+        'boto3': ['boto3>=1.7.0'],
+    },
     license="Apache Software License 2.0",
     long_description=readme,
     include_package_data=True,

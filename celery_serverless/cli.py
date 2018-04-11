@@ -49,7 +49,7 @@ def deploy(ctx, *args, **kwargs):
 @click.pass_context
 def invoke(ctx, *args, **kwargs):
     try:
-        sys.exit(invoker.invoke_main())
+        sys.exit(invoker.Invoker().invoke_main())
     except RuntimeError as e:
         if isinstance(e, NotImplementedError):
             raise
