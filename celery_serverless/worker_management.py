@@ -57,12 +57,12 @@ def shutdown_when_done(*args, **kwargs):
     os.kill(pid, signal.SIGINT)  # Trigger Ctrl+C behaviours
 
 
-def wakeme_soon(handler:'callable'=None, delay:'seconds'=1.0, reason='', *args, **kwargs):
+def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args, **kwargs):
     # After born, wait some seconds and get a UNIX signal poke.
     if reason:
         reason = 'waiting for "%s"' % reason
     logger.debug('Registering an ALRM for %.2f seconds ahead %s', delay, reason)
-    signal.signal(signal.SIGALRM, handler)
+    signal.signal(signal.SIGALRM, callback)
     signal.setitimer(signal.ITIMER_REAL, delay)
 
 
@@ -75,12 +75,14 @@ def attach_hooks(wait_connection=4.0, wait_job=1.0):
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
 
-    timeout = partial(wakeme_soon, handler=shutdown_when_done)
-
-    # Return the hooks to be hold somewhere. Else it could be garbage collected
-    hooks = []
-    # After worker process up: celeryd_init
-    hooks.append(celeryd_init.connect(partial(timeout, delay=wait_connection, reason='broker connection')))
-    # After broker queue connected: worker_ready
-    hooks.append(worker_ready.connect(partial(timeout, delay=wait_job, reason='job to come')))
+    hooks = [   # Hold the hooks created. Else it could be garbage collected
+        celeryd_init.connect(partial(  # After worker process up: celeryd_init
+            wakeme_soon,
+            reason='broker connection', delay=wait_connection, callback=shutdown_when_done,
+        )),
+        worker_ready.connect(partial(  # After broker queue connected: worker_ready
+            wakeme_soon,
+            reason='job to come', delay=wait_job, callback=shutdown_when_done,
+        )),
+    ]
     return hooks
