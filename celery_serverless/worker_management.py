@@ -75,14 +75,12 @@ def attach_hooks(wait_connection=4.0, wait_job=1.0):
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
 
-    hooks = [   # Hold the hooks created. Else it could be garbage collected
-        celeryd_init.connect(partial(  # After worker process up: celeryd_init
-            wakeme_soon,
-            reason='broker connection', delay=wait_connection, callback=shutdown_when_done,
-        )),
-        worker_ready.connect(partial(  # After broker queue connected: worker_ready
-            wakeme_soon,
-            reason='job to come', delay=wait_job, callback=shutdown_when_done,
-        )),
-    ]
-    return hooks
+    @celeryd_init.connect  # After worker process up
+    def _broker_connection_timeout(*args, **kwargs):
+        return wakeme_soon(reason='broker connection', delay=wait_connection, callback=shutdown_when_done)
+
+    @worker_ready.connect  # After broker queue connected
+    def _worker_ready_timeout(*args, **kwargs):
+        return wakeme_soon(reason='job to come', delay=wait_job, callback=shutdown_when_done)
+
+    return [_broker_connection_timeout, _worker_ready_timeout]  # Using weak references
