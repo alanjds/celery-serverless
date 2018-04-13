@@ -52,6 +52,12 @@ def run(command, out=None, *args, **kwargs):
                          stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT,
                          *args, **kwargs)
+
+    if out == 'oneshot':
+        stdout, _ = p.communicate()
+        yield stdout, p.returncode
+        return
+
     while p.poll() is None:
         for line in iter(p.stdout.readline, b''):
             if out:

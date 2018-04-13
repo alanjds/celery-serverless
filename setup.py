@@ -3,6 +3,7 @@
 
 """The setup script."""
 
+import sys
 from setuptools import setup, find_packages
 
 with open('README.rst') as readme_file:
@@ -15,9 +16,14 @@ requirements = [
     'dirtyjson==1.0.7',
 ]
 
-setup_requirements = ['pytest-runner', ]
+setup_requirements = []
 
 test_requirements = ['pytest', 'coverage']
+
+needs_pytest = {'pytest', 'test', 'ptr'}.intersection(sys.argv)
+if needs_pytest:
+    setup_requirements += ['pytest-runner']
+
 
 setup(
     author="Alan Justino & Samuel Barbosa Neto",
@@ -27,10 +33,7 @@ setup(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Natural Language :: English',
-        "Programming Language :: Python :: 2",
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
     ],
@@ -57,6 +60,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/alanjds/celery-serverless',
-    version='0.1.0',
+    version='0.2.0',
     zip_safe=False,
 )
