@@ -79,7 +79,11 @@ class Invoker(object):
         if retcode != 0:
             error = RuntimeError('Invocation failed on Serverless: %s' % command)
 
-            details = dirtyjson.loads(output)
+            try:
+                details = dirtyjson.loads(output)
+            except ValueError:  # No JSON in the output
+                details = {}
+
             if isinstance(details, dict):
                 details = dict(details)
             elif isinstance(details, list):
