@@ -50,7 +50,7 @@ class Invoker(object):
         try:
             logs = invoker()  # Should raise exception on some problem
         except RuntimeError as err:
-            logger.info('Invocation failed via "%s": %s', strategy, err.details)
+            logger.warning('Invocation failed via "%s": %s', strategy, err.details)
         return True
 
 
