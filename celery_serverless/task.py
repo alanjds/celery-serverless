@@ -20,15 +20,25 @@ def trigger_invoke(task=None, *args, **kwargs):
     return invoker.Invoker().invoke_main()
 
 
-class TriggerServerlessMixin(object):
+class TriggerServerlessBeforeMixin(object):
     """Do the standart Task enqueue, then invokes the Serverless Function"""
     def apply_async(self, *args, **kwargs):
-        return trigger_invoke(self, *args, **kwargs)
+        trigger_invoke(self, *args, **kwargs)
+        result = super(__class__, self).apply_async(*args, **kwargs)
+        return result
 
 
-class TriggerAfterQueueTask(Task, TriggerServerlessMixin):
+class TriggerServerlessAfterMixin(object):
+    """Do the standart Task enqueue, then invokes the Serverless Function"""
+    def apply_async(self, *args, **kwargs):
+        result = super(__class__, self).apply_async(*args, **kwargs)
+        trigger_invoke(self, *args, **kwargs)
+        return result
+
+
+class TriggerAfterQueueTask(TriggerServerlessAfterMixin, Task):
     """Do the standart Task enqueue, then invokes the Serverless Function"""
 
 
-class TriggerBeforeQueueTask(TriggerServerlessMixin, Task):
+class TriggerBeforeQueueTask(TriggerServerlessBeforeMixin, Task):
     """Invokes the Serverless Function, then do the standard Task enqueue"""
