@@ -20,7 +20,7 @@ try:
     try:
         lambda_client = boto3.client('lambda')
     except botocore.exceptions.NoRegionError:
-        logger.warning("'boto3' invoker cannot be used: please set a default region on serverless.yml")
+        logger.warning("'boto3' invoker cannot be used: please set a default AWS region on serverless.yml")
         lambda_client = None
 except ImportError:  # Boto3 is an optional extra on setup.py
     lambda_client = None
