@@ -13,6 +13,7 @@ from celery_serverless.config import get_config
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 try:
     import boto3
