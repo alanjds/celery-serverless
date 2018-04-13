@@ -37,7 +37,7 @@ class Invoker(object):
 
     def invoke_main(self, strategy=''):
         if not strategy:
-            strategy = self._infer_strategy(self.config)
+            strategy = self._infer_strategy()
 
         logger.info("Invoke strategy selected: '%s'", strategy)
         if strategy == 'serverless':
@@ -72,7 +72,7 @@ class Invoker(object):
         logger.debug("Invoking via 'serverless'")
         command += ' --log --verbose --function %s' % name
 
-        output, retcode = next(run(command, output='oneshot'))
+        output, retcode = next(run(command, out='oneshot'))
 
         logger.debug("Invocation logs from 'serverless':\n%s", output)
 
