@@ -33,6 +33,7 @@ _pre_warmup_envvar = 'CELERY_SERVERLESS_PRE_WARMUP'
 _pre_handler_definition_envvar = 'CELERY_SERVERLESS_PRE_HANDLER_DEFINITION'
 _post_handler_definition_envvar = 'CELERY_SERVERLESS_POST_HANDLER_DEFINITION'
 _pre_handler_call_envvar = 'CELERY_SERVERLESS_PRE_HANDLER_CALL'
+_error_handler_call_envvar = 'CELERY_SERVERLESS_ERROR_HANDLER_CALL'
 _post_handler_call_envvar = 'CELERY_SERVERLESS_POST_HANDLER_CALL'
 
 ### 1st hook call
@@ -79,6 +80,9 @@ def worker(event, context):
             "message": "Celery worker worked, lived, and died.",
         }
         return {"statusCode": 200, "body": json.dumps(body)}
+    except Exception as e:
+        ### Err hook call
+        _maybe_call_hook(_error_handler_call_envvar, locals())
     finally:
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
