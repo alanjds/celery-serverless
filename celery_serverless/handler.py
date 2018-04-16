@@ -22,6 +22,7 @@ def _maybe_call_hook(envname, locals_={}):
 def _import_callable(name):
     result = None
     if name:
+        logging.info("Importing hook '%s'", name)
         module_name, split, callable_name = name.rpartition(':')
         module = importlib.import_module(module_name)
         result = getattr(module, callable_name)
