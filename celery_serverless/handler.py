@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
 
-def _maybe_call_hook(envname, locals={}):
+def _maybe_call_hook(envname, locals_={}):
     func_path = os.environ.get(envname)
     logger.debug("Trying the hook %s: '%s'", envname, func_path or '(not set)')
     func = _import_callable(func_path)
-    return func(**locals) if func else None
+    return func(locals_=locals_) if func else None
 
 
 def _import_callable(name):
@@ -29,9 +29,10 @@ def _import_callable(name):
 
 
 _pre_warmup_envvar = 'CELERY_SERVERLESS_PRE_WARMUP'
-_post_warmup_envvar = 'CELERY_SERVERLESS_POST_WARMUP'
-_pre_handler_envvar = 'CELERY_SERVERLESS_PRE_HANDLER'
-_post_handler_envvar = 'CELERY_SERVERLESS_POST_HANDLER'
+_pre_handler_definition_envvar = 'CELERY_SERVERLESS_PRE_HANDLER_DEFINITION'
+_post_handler_definition_envvar = 'CELERY_SERVERLESS_POST_HANDLER_DEFINITION'
+_pre_handler_call_envvar = 'CELERY_SERVERLESS_PRE_HANDLER_CALL'
+_post_handler_call_envvar = 'CELERY_SERVERLESS_POST_HANDLER_CALL'
 
 ### 1st hook call
 _maybe_call_hook(_pre_warmup_envvar, locals())
@@ -42,15 +43,15 @@ from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
 ### 2nd hook call
-_maybe_call_hook(_post_warmup_envvar, locals())
+_maybe_call_hook(_pre_handler_definition_envvar, locals())
 
 
 def worker(event, context):
     global hooks
 
     try:
-        ### 3rd hook call
-        _maybe_call_hook(_pre_handler_envvar, locals())
+        ### 4th hook call
+        _maybe_call_hook(_pre_handler_call_envvar, locals())
 
         try:
             remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
@@ -78,4 +79,9 @@ def worker(event, context):
         }
         return {"statusCode": 200, "body": json.dumps(body)}
     finally:
-        _maybe_call_hook(_post_handler_envvar, locals())
+        ### 5th hook call
+        _maybe_call_hook(_post_handler_call_envvar, locals())
+
+
+### 3rd hook call
+_maybe_call_hook(_post_handler_definition_envvar, locals())
