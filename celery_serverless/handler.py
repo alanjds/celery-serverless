@@ -83,6 +83,7 @@ def worker(event, context):
     except Exception as e:
         ### Err hook call
         _maybe_call_hook(_error_handler_call_envvar, locals())
+        raise
     finally:
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
