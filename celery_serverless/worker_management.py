@@ -12,10 +12,10 @@ logger.setLevel('DEBUG')
 
 
 def _get_options_from_environ():
-    """Gets all CELERY_SERVERLESS_* environment vars"""
+    """Gets all CELERY_WORKER_* environment vars"""
     for k,v in os.environ.items():
-        if k.upper().startswith('CELERY_SERVERLESS_'):
-            k = k.lower().partition('celery_serverless_')[-1]
+        if k.upper().startswith('CELERY_WORKER_'):
+            k = k.lower().partition('celery_worker_')[-1]
             yield (k,v)
 
 
