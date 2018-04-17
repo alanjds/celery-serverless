@@ -38,7 +38,7 @@ class Invoker(object):
 
     def invoke_main(self, strategy=''):
         if not strategy:
-            strategy = self._infer_strategy(self.config)
+            strategy = self._infer_strategy()
 
         logger.info("Invoke strategy selected: '%s'", strategy)
         if strategy == 'serverless':
@@ -73,14 +73,18 @@ class Invoker(object):
         logger.debug("Invoking via 'serverless'")
         command += ' --log --verbose --function %s' % name
 
-        output, retcode = next(run(command, output='oneshot'))
+        output, retcode = next(run(command, out='oneshot'))
 
         logger.debug("Invocation logs from 'serverless':\n%s", output)
 
         if retcode != 0:
             error = RuntimeError('Invocation failed on Serverless: %s' % command)
 
-            details = dirtyjson.loads(output)
+            try:
+                details = dirtyjson.loads(output)
+            except ValueError:  # No JSON in the output
+                details = {}
+
             if isinstance(details, dict):
                 details = dict(details)
             elif isinstance(details, list):

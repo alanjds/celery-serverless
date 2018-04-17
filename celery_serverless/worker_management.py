@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
 
+def _get_options_from_environ():
+    """Gets all CELERY_WORKER_* environment vars"""
+    for k,v in os.environ.items():
+        if k.upper().startswith('CELERY_WORKER_'):
+            k = k.lower().partition('celery_worker_')[-1]
+            yield (k,v)
+
+
 def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
     command_argv = [
         'celery',
@@ -29,11 +37,12 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
     if hardlimit:
         command_argv.extend(['--time-limit', '%s' % hardlimit])
 
+    options.update(dict(_get_options_from_environ()))
     for k, v in options.items():
         if len(k) == 1:
-            option = '-%s' % k
+            option = '-%s' % k.lower()
         else:
-            option = '--%s' % k
+            option = '--%s' % k.lower()
         command_argv.append(option)
 
         if v:
