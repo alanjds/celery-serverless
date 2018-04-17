@@ -27,7 +27,7 @@ functions:
 custom:
   pythonRequirements:
     zip: false
-    # dockerizePip: true
+    dockerizePip: 'non-linux'
     invalidateCaches: false
     pipCmdExtraArgs:
       - --cache-dir
