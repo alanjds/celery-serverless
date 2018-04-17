@@ -61,7 +61,8 @@ def shutdown_when_done(*args, **kwargs):
     # Start to shutdown by triggering <Ctrl+C>
     # The worker will stop getting tasks and will prepare to shutdown
     # but will wait the existing task to finish its lifetime.
-    logger.debug('Informing the workers to stop accepting tasks')
+    reason = kwargs.get('reason', '')
+    logger.debug('Informing the workers to stop accepting tasks. %s', reason)
     pid = os.getpid()
     os.kill(pid, signal.SIGINT)  # Trigger Ctrl+C behaviours
 
@@ -80,13 +81,14 @@ def attach_hooks(wait_connection=4.0, wait_job=1.0):
     Register the needed hooks:
     - One to trigger stop getting tasks after the 1st, and shutdown when done
     """
-    logger.info('Attaching hooks')
+    logger.info('Attaching Celery hooks')
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
 
     @celeryd_init.connect  # After worker process up
     def _broker_connection_timeout(*args, **kwargs):
-        return wakeme_soon(reason='broker connection', delay=wait_connection, callback=shutdown_when_done)
+        _shutdown = partial(shutdown_when_done, reason='Broker never connected')
+        return wakeme_soon(reason='broker connection', delay=wait_connection, callback=_shutdown)
 
     @worker_ready.connect  # After broker queue connected
     def _worker_ready_timeout(*args, **kwargs):
