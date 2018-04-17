@@ -28,11 +28,10 @@ def worker(event, context):
     hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
 
     if not hooks:
-            logger.debug('Fresh Celery worker. Attach hooks!')
+        logger.debug('Fresh Celery worker. Attach hooks!')
         hooks = attach_hooks()
-        else:
-            logger.debug('Old Celery worker. Already have hooks.')
-
+    else:
+        logger.debug('Old Celery worker. Already have hooks.')
 
     logger.debug('Spawning the worker(s)')
     spawn_worker(
