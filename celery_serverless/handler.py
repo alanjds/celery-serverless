@@ -64,7 +64,6 @@ def worker(event, context):
         softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
         hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
 
-        logger.debug('Checking Celery hooks')
         if not hooks:
             logger.debug('Fresh Celery worker. Attach hooks!')
             hooks = attach_hooks()
