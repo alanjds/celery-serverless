@@ -5,6 +5,7 @@ import logging
 from functools import partial
 
 import celery.bin.celery
+import celery.worker.state
 from celery.signals import celeryd_init, worker_ready
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,9 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
     try:
         celery.bin.celery.main(command_argv)  # Will block until worker dies.
     except SystemExit as e:  # Worker is dead.
+        state = celery.worker.state
+        state.should_stop = False
+        state.should_terminate = False
         return e
     raise RuntimeError('Is the worker left running?')
 
