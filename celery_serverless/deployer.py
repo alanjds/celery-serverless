@@ -50,8 +50,8 @@ def _install_serverless_yml():
             click.secho(dedent("""
             # serverless.yml
             functions:
-              worker:
-                handler: celery_serverless.handler.worker
+              celery_serverless_worker:
+                handler: celery_serverless.handler_worker
             """), bold=True, err=True)
             should_copy_to = os.path.join(should_copy_to, 'serverless.yml.celery')
 
