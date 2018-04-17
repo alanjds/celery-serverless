@@ -126,6 +126,10 @@ class Invoker(object):
         return output
 
 
+def invoke(config=None, *args, **kwargs):
+    return Invoker(config=config).invoke_main(*args, **kwargs)
+
+
 def _get_serverless_name(config):
     for name, options in config['functions'].items():
         if options.get('handler') == CELERY_HANDLER_PATH:
