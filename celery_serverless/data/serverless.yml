@@ -15,19 +15,14 @@ service: celery-worker # NOTE: update this with your service name
 
 provider:
   name: aws
-  runtime: python3.6
 
 functions:
   celery_serverless_worker:
     handler: celery_serverless.handler_worker
-
-    events:
-#      - s3: ${env:BUCKET}
-#      - schedule: rate(10 minutes)
-#      - sns: greeter-topic
-     - http:
-         path: celery/worker
-         method: post
+    runtime: python3.6
+    timeout: 10  # Up to 300
+    environment:
+      CELERY_WORKER_APP: 'project'
 
 custom:
   pythonRequirements:
