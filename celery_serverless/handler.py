@@ -8,6 +8,7 @@ import os
 import importlib
 import logging
 
+logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
