@@ -96,25 +96,35 @@ class Invoker(object):
         return output
 
 
-    def _invoke_boto3(self):
+    def _invoke_boto3(self, sync=False):
         lambda_arn = _get_awslambda_arn(CELERY_HANDLER_PATH)
-        logger.debug("Invoking via 'boto3'")
+        logger.debug("Invoking via 'boto3' %s", 'sync' if sync else 'async')
+
+        if sync:
+            options = dict(
+                InvocationType='RequestResponse', # 'RequestResponse'|'Event'|'DryRun'
+                LogType='Tail',  # 'None'|'Tail'
+            )
+        else:
+            options = dict(
+                InvocationType='Event'
+            )
+
         response = lambda_client.invoke(
             FunctionName=lambda_arn,
-            InvocationType='RequestResponse', # 'RequestResponse'|'Event'|'DryRun'
-            LogType='Tail',  # 'None'|'Tail'
             #ClientContext='string',
             #Payload=b'bytes'|file,
             #Qualifier='$LATEST',  # 'string'
+            **options,
         )
 
         if logger.getEffectiveLevel() <= logging.DEBUG:
             log_output = pformat(response)
             logger.debug("Invocation response from 'boto3':\n%s", response)
 
-        output = codecs.decode(response['LogResult'].encode(), 'base64')
+        output = codecs.decode(response['LogResult'].encode(), 'base64') if sync else ''
 
-        if logger.getEffectiveLevel() <= logging.DEBUG:
+        if output and logger.getEffectiveLevel() <= logging.DEBUG:
             logger.debug("Invocation logs from 'boto3':\n%s", output)
 
         if 'FunctionError' in response:
