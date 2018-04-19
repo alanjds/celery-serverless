@@ -31,6 +31,7 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
         '--without-mingle',
         '--task-events',
         '-O', 'fair',
+        '-P', 'solo',
     ]
 
     if softlimit:
