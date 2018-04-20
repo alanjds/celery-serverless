@@ -57,6 +57,12 @@ def worker(event, context):
         _maybe_call_hook(_pre_handler_call_envvar, locals())
 
         try:
+            request_id = context.aws_request_id
+        except AttributeError:
+            request_id = '(unknown)'
+        logger.info('START: Handle request ID: %s', request_id)
+
+        try:
             remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
         except Exception as e:
             logger.exception('Could not got remaining_seconds. Is the context right?')
@@ -88,6 +94,7 @@ def worker(event, context):
         _maybe_call_hook(_error_handler_call_envvar, locals())
         raise
     finally:
+        logger.info('END: Handle request ID: %s', request_id)
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
 
