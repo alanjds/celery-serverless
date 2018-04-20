@@ -6,8 +6,7 @@ from functools import partial
 
 import celery.bin.celery
 import celery.worker.state
-from celery.signals import celeryd_init, worker_ready, worker_process_shutdown, task_unknown, task_rejected
-from celery.signals import *
+from celery.signals import celeryd_init, worker_ready, task_prerun, task_postrun
 from celery.exceptions import WorkerShutdown
 
 logger = logging.getLogger(__name__)
@@ -106,12 +105,9 @@ def attach_hooks(wait_connection=8.0, wait_job=1.0):
 
         worker.__broker_connected = False
         def _maybe_shutdown(*args, **kwargs):
-            import ipdb; ipdb.set_trace()
-            if worker.__broker_connected:
-                logger.debug('Keep going. Connected to the broker [callback:celeryd_init]')
-            else:
-                logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
-                raise WorkerShutdown()
+            assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
+            logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
+            raise WorkerShutdown()
         return wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
 
     # #######
@@ -133,7 +129,7 @@ def attach_hooks(wait_connection=8.0, wait_job=1.0):
                 logger.debug('Keep going. Task received [callback:worker_ready]')
             else:
                 logger.info('Shutting down. Never received a Task [callback:worker_ready]')
-                # raise WorkerShutdown()
+                raise WorkerShutdown()
         return wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
 
     @task_prerun.connect  # Task already got.
@@ -160,4 +156,4 @@ def attach_hooks(wait_connection=8.0, wait_job=1.0):
         raise WorkerShutdown()
 
     # Using weak references. Is up to the caller to store the callbacks produced
-    return [_setup_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _demand_shutdown]
+    return [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _demand_shutdown]
