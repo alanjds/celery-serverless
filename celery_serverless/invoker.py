@@ -9,8 +9,9 @@ from pprint import pformat
 
 import dirtyjson
 import click
-from celery_serverless.config import get_config
+from future_thread import Future as FutureThread
 
+from celery_serverless.config import get_config
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -18,6 +19,7 @@ logger.setLevel(logging.DEBUG)
 try:
     import boto3
     import botocore
+    import aioboto3
     try:
         lambda_client = boto3.client('lambda')
     except botocore.exceptions.NoRegionError:
@@ -27,7 +29,7 @@ except ImportError:  # Boto3 is an optional extra on setup.py
     lambda_client = None
 
 from .cli_utils import run
-
+from .utils import run_aio_on_thread
 
 CELERY_HANDLER_PATH = 'celery_serverless.handler_worker'
 
@@ -49,10 +51,10 @@ class Invoker(object):
             raise NotImplementedError("Could not find a way to invoke via '%s' strategy" % strategy)
 
         try:
-            logs = invoker()  # Should raise exception on some problem
+            logs, future = invoker()  # Should raise exception on some problem
         except RuntimeError as err:
             logger.warning('Invocation failed via "%s": %s', strategy, err.details)
-        return True
+        return True, future
 
 
     def _infer_strategy(self):
@@ -93,47 +95,67 @@ class Invoker(object):
             error.logs = output
             error.details = details
             raise error
-        return output
+        return output, None
 
 
-    def _invoke_boto3(self, sync=False):
+    def _invoke_boto3(self, sync=False, executor='asyncio'):
         lambda_arn = _get_awslambda_arn(CELERY_HANDLER_PATH)
-        logger.debug("Invoking via 'boto3' %s", 'sync' if sync else 'async')
+        logger.debug("Invoking via 'boto3' %s %s", 'sync' if sync else 'async', executor)
+        future = None
+        output = ''
 
-        if sync:
-            options = dict(
-                InvocationType='RequestResponse', # 'RequestResponse'|'Event'|'DryRun'
-                LogType='Tail',  # 'None'|'Tail'
-            )
-        else:
-            options = dict(
-                InvocationType='Event'
-            )
-
-        response = lambda_client.invoke(
+        invoke_options = dict(
             FunctionName=lambda_arn,
             #ClientContext='string',
             #Payload=b'bytes'|file,
             #Qualifier='$LATEST',  # 'string'
-            **options,
         )
 
-        if logger.getEffectiveLevel() <= logging.DEBUG:
-            log_output = pformat(response)
-            logger.debug("Invocation response from 'boto3':\n%s", response)
+        if sync:
+            invoke_options.update(dict(
+                InvocationType='RequestResponse', # 'RequestResponse'|'Event'|'DryRun'
+                LogType='Tail',  # 'None'|'Tail'
+            ))
+        else:
+            invoke_options.update(dict(
+                InvocationType='Event'
+            ))
 
-        output = codecs.decode(response['LogResult'].encode(), 'base64') if sync else ''
+        if executor == 'asyncio':
+            logger.debug('Invoking via asyncio')
+            async def _func():
+                async with aioboto3.client('lambda') as cli:
+                    res = await cli.invoke(**invoke_options)
+                return res
+            future = run_aio_on_thread(_func())
 
-        if output and logger.getEffectiveLevel() <= logging.DEBUG:
-            logger.debug("Invocation logs from 'boto3':\n%s", output)
+        elif executor == 'threading':
+            logger.debug('Invoking via threading')
+            future = FutureThread(lambda_client.invoke, **invoke_options)
 
-        if 'FunctionError' in response:
-            error = RuntimeError('Invocation failed on AWS Lambda: %s' % lambda_arn)
-            error.logs = output
-            error.details = json.load(response['Payload'])
-            raise error
+        elif executor == 'linear':   # Fallback to the traditional "linear" way
+            logger.debug('Invoking via "linear" inline code')
+            response = lambda_client.invoke(**invoke_options)
 
-        return output
+            if logger.getEffectiveLevel() <= logging.DEBUG:
+                log_output = pformat(response)
+                logger.debug("Invocation response from 'boto3':\n%s", response)
+
+            output = codecs.decode(response['LogResult'].encode(), 'base64') if sync else ''
+
+            if output and logger.getEffectiveLevel() <= logging.DEBUG:
+                logger.debug("Invocation logs from 'boto3':\n%s", output)
+
+            if 'FunctionError' in response:
+                error = RuntimeError('Invocation failed on AWS Lambda: %s' % lambda_arn)
+                error.logs = output
+                error.details = json.load(response['Payload'])
+                raise error
+
+        else:
+            raise TypeError("'executor' not found")
+
+        return output, future
 
 
 def invoke(config=None, *args, **kwargs):

@@ -21,7 +21,7 @@ def _start_thread():
     slave_thread.start()
 
 
-def aiorun_on_thread(coro):
+def run_aio_on_thread(coro):
     if not isawaitable(coro):
         raise TypeError('An awaitable should be provided')
 
