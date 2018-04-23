@@ -1,7 +1,7 @@
 # coding: utf-8
 import asyncio
 from threading import Thread
-from types import CoroutineType
+from inspect import isawaitable
 
 slave_loop = None    # loop
 slave_thread = None  # type: Thread
@@ -22,8 +22,8 @@ def _start_thread():
 
 
 def aiorun_on_thread(coro):
-    if not isinstance(coro, CoroutineType):
-        raise TypeError('A coroutine should be provided')
+    if not isawaitable(coro):
+        raise TypeError('An awaitable should be provided')
 
     if not slave_thread:
         _start_thread()
