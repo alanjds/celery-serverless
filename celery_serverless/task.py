@@ -23,8 +23,9 @@ def trigger_invoke(task=None, *args, **kwargs):
 class TriggerServerlessBeforeMixin(object):
     """Do the standart Task enqueue, then invokes the Serverless Function"""
     def apply_async(self, *args, **kwargs):
-        trigger_invoke(self, *args, **kwargs)
+        output, promise = trigger_invoke(self, *args, **kwargs)
         result = super(__class__, self).apply_async(*args, **kwargs)
+        result._serverless_invocation = promise
         return result
 
 
@@ -32,7 +33,8 @@ class TriggerServerlessAfterMixin(object):
     """Do the standart Task enqueue, then invokes the Serverless Function"""
     def apply_async(self, *args, **kwargs):
         result = super(__class__, self).apply_async(*args, **kwargs)
-        trigger_invoke(self, *args, **kwargs)
+        output, promise = trigger_invoke(self, *args, **kwargs)
+        result._serverless_invocation = promise
         return result
 
 
