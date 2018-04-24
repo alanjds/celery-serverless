@@ -94,7 +94,11 @@ def worker(event, context):
         _maybe_call_hook(_error_handler_call_envvar, locals())
         raise
     finally:
-        logger.info('END: Handle request ID: %s', request_id)
+        try:
+            logger.info('END: Handle request ID: %s', request_id)
+        except:
+            pass
+
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
 
