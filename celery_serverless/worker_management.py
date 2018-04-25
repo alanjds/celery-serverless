@@ -85,7 +85,7 @@ def cancel_wakeme():
     signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
 
 
-def attach_hooks(wait_connection=8.0, wait_job=1.0):
+def attach_hooks(wait_connection=8.0, wait_job=4.0):
     """
     Register the needed hooks:
     - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
