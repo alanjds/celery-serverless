@@ -48,7 +48,10 @@ setup(
     },
     install_requires=requirements,
     extras_require={
-        'boto3': ['boto3>=1.7.0'],
+        'boto3': [
+            'boto3>=1.7.0',
+            'aioboto3>=3.0.0',
+        ],
     },
     license="Apache Software License 2.0",
     long_description=readme,
