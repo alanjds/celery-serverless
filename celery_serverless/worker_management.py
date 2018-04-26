@@ -7,7 +7,7 @@ from functools import partial
 import celery.bin.celery
 import celery.worker.state
 import celery.worker.request
-from celery.signals import celeryd_init, worker_ready, task_prerun, task_postrun
+from celery.signals import celeryd_init, worker_ready, task_prerun, task_postrun, task_success
 from celery.exceptions import WorkerShutdown
 
 logger = logging.getLogger(__name__)
@@ -137,6 +137,10 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
 
         worker.__task_received = False
         worker.__task_finished = False
+
+        # HACK: (Re)start to listen the queue. Could had been silenced before.
+        worker.consumer.add_task_queue('celery')  # TODO: Select the queue dynamically
+
         def _maybe_shutdown(*args, **kwargs):
             if worker.__task_received:
                 logger.debug('Keep going. Task received [callback:worker_ready]')
@@ -149,17 +153,23 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
     def _unset_watchdogs(*args, **kwargs):
         # Worker is not received on this signal, direct or indirectly :/
         worker = context['worker']
-
-        # New task should be rejected and returned if one was already processed.
-        worker.consumer.connection._default_channel.do_restore = True
-
         worker.__task_received = True
+
         logger.info('Task received! [task_prerun]')
         cancel_wakeme()
 
-        if worker.__task_finished:  # Already worked one task? Reject and Shutdown!
-            logger.info('Rejecting a task and shutting down via WorkerShutdown() [task_prerun]')
-            raise WorkerShutdown()
+        # New task should be rejected and returned if one was already processed.
+        worker.consumer.connection._default_channel.do_restore = True
+        assert not worker.__task_finished, 'Should had shutdown on task_success. Not here!'
+
+    @task_success.connect
+    def _ack_success(sender=None, *args, **kwargs):
+        task = sender
+        logger.info('Job done. Stop receiving new messages avoiding Kombu prefetch. [task_success]')
+
+        worker = context['worker']  # TODO: Get the list of queues.
+        worker.consumer.cancel_task_queue('celery')  # Manually, to prevent the next line to receive a new task
+        task._original_request.message.ack()  # Manually, as WorkerShutdown() will redeliver current message
 
     @task_postrun.connect  # Task finished
     def _demand_shutdown(*args, **kwargs):
@@ -168,20 +178,13 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
         logger.info('Job done. Now shutdown! [task_postrun]')
 
         # Hack around "Worker shutdown creates duplicate messages in SQS broker"
-        # (applies to any broker, if I understand correctly)
+        # (applies to any broker but 'amqp', if I understand correctly)
         # Celery issue #4002
         # See: https://github.com/celery/celery/issues/4002#issuecomment-377111157
         # See: https://gist.github.com/lovemyliwu/af5112de25b594205a76c3bfd00b9340
         worker.consumer.connection._default_channel.do_restore = False
 
-        # Raising WorkerShutdown directly does not allow the worked task to be
-        # acknowledge()ed property, leading to duplicate runs. Solved by
-        # allowing the task to finish properly and raising a WorkerShutdown()
-        # after wait_job seconds or on @task_prerun, whatever comes first.
-        def _should_shutdown(*args, **kwargs):
-            logger.info('Shutting down via WorkerShutdown() [callback:task_postrun]')
-            raise WorkerShutdown()
-        return wakeme_soon(delay=wait_job, callback=_should_shutdown)
+        raise WorkerShutdown()
 
     # Using weak references. Is up to the caller to store the callbacks produced
-    return [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _demand_shutdown]
+    return [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _demand_shutdown]
