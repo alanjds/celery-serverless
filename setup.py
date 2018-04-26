@@ -14,6 +14,7 @@ requirements = [
     'celery~=4.1.0',
     'ruamel.yaml~=0.15.37',
     'dirtyjson==1.0.7',
+    'future-thread~=1.0',
 ]
 
 setup_requirements = []
