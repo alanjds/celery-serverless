@@ -6,6 +6,7 @@ from functools import partial
 
 import celery.bin.celery
 import celery.worker.state
+import celery.worker.request
 from celery.signals import celeryd_init, worker_ready, task_prerun, task_postrun
 from celery.exceptions import WorkerShutdown
 
@@ -15,6 +16,16 @@ logger.setLevel('DEBUG')
 # To store the Worker instance.
 # Sometime it will change to a Thread or Async aware thing
 context = {}
+
+
+class PatchedRequest(celery.worker.request.Request):
+    def __init__(self, *args, **kwargs):
+        res = super(__class__, self).__init__(*args, **kwargs)
+        logger.warning('Passing Request into the tasks')
+        self.task._original_request = self  # Should I ?
+# Monkey patch!! Ahoy!
+celery.worker.request._patched_Request = celery.worker.request.Request
+celery.worker.request.Request = PatchedRequest
 
 
 def _get_options_from_environ():
