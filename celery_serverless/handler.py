@@ -52,6 +52,7 @@ _maybe_call_hook(_pre_handler_definition_envvar, locals())
 def worker(event, context):
     global hooks
 
+    request_id = '(unknown)'
     try:
         ### 4th hook call
         _maybe_call_hook(_pre_handler_call_envvar, locals())
@@ -59,7 +60,7 @@ def worker(event, context):
         try:
             request_id = context.aws_request_id
         except AttributeError:
-            request_id = '(unknown)'
+            pass
         logger.info('START: Handle request ID: %s', request_id)
 
         try:
@@ -94,11 +95,7 @@ def worker(event, context):
         _maybe_call_hook(_error_handler_call_envvar, locals())
         raise
     finally:
-        try:
-            logger.info('END: Handle request ID: %s', request_id)
-        except:
-            pass
-
+        logger.info('END: Handle request ID: %s', request_id)
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
 
