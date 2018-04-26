@@ -6,10 +6,15 @@ from functools import partial
 
 import celery.bin.celery
 import celery.worker.state
-from celery.signals import celeryd_init, worker_ready
+from celery.signals import celeryd_init, worker_ready, task_prerun, task_postrun
+from celery.exceptions import WorkerShutdown
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
+
+# To store the Worker instance.
+# Sometime it will change to a Thread or Async aware thing
+context = {}
 
 
 def _get_options_from_environ():
@@ -31,6 +36,7 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
         '--without-mingle',
         '--task-events',
         '-O', 'fair',
+        '-P', 'solo',
     ]
 
     if softlimit:
@@ -61,18 +67,11 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
     raise RuntimeError('Is the worker left running?')
 
 
-def shutdown_when_done(*args, **kwargs):
-    # Start to shutdown by triggering <Ctrl+C>
-    # The worker will stop getting tasks and will prepare to shutdown
-    # but will wait the existing task to finish its lifetime.
-    reason = kwargs.get('reason', '')
-    logger.debug('Informing the workers to stop accepting tasks. %s', reason)
-    pid = os.getpid()
-    os.kill(pid, signal.SIGINT)  # Trigger Ctrl+C behaviours
-
-
 def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args, **kwargs):
-    # After born, wait some seconds and get a UNIX signal poke.
+    """
+    Sets an alarm via Unix SIGALRM up to 'seconds' ahead.
+    Then calls the 'callback'.
+    """
     if reason:
         reason = 'waiting for "%s"' % reason
     logger.debug('Registering an ALRM for %.2f seconds ahead %s', delay, reason)
@@ -80,22 +79,98 @@ def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args,
     signal.setitimer(signal.ITIMER_REAL, delay)
 
 
-def attach_hooks(wait_connection=4.0, wait_job=1.0):
+def cancel_wakeme():
+    """Disables the actual Unix SIGALRM set, if any"""
+    signal.signal(signal.SIGALRM, signal.SIG_DFL)   # Play safe
+    signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
+
+
+def attach_hooks(wait_connection=8.0, wait_job=1.0):
     """
     Register the needed hooks:
-    - One to trigger stop getting tasks after the 1st, and shutdown when done
+    - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
+    - After broker connected, shutdown if cannot receive a job within 'wait_job'
+      This safeguards against empty queues too.
+    - Receiving a job, clears the watchdogs.
+    - Finished a job, set an alarm for shutdown, allowing Task to acknowledge()
+    - If a new task comes after the 1st processed, reject and shutdown.
     """
     logger.info('Attaching Celery hooks')
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
 
     @celeryd_init.connect  # After worker process up
-    def _broker_connection_timeout(*args, **kwargs):
-        _shutdown = partial(shutdown_when_done, reason='Broker never connected')
-        return wakeme_soon(reason='broker connection', delay=wait_connection, callback=_shutdown)
+    def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
+        logger.debug('Connecting to the broker [celeryd_init]')
+        context['worker'] = worker = instance
+
+        worker.__broker_connected = False
+        def _maybe_shutdown(*args, **kwargs):
+            assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
+            logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
+            raise WorkerShutdown()
+        return wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
+
+    # #######
+    # @worker_init.connect  # Before connecting, if -P solo
+    # def _worker_init(sender=None, *args, **kwargs):
+    #     logger.debug('Connecting to the broker [worker_init]')
+    # #######
 
     @worker_ready.connect  # After broker queue connected
-    def _worker_ready_timeout(*args, **kwargs):
-        return wakeme_soon(reason='job to come', delay=wait_job, callback=shutdown_when_done)
+    def _set_job_watchdog(sender=None, *args, **kwargs):
+        assert context['worker'] == sender.controller, 'Oops: Are the CONTEXT messed?'
+        worker = context['worker']
+        worker.__broker_connected = True
+        logger.debug('Connected to the broker! [worker_ready]')
 
-    return [_broker_connection_timeout, _worker_ready_timeout]  # Using weak references
+        worker.__task_received = False
+        worker.__task_finished = False
+        def _maybe_shutdown(*args, **kwargs):
+            if worker.__task_received:
+                logger.debug('Keep going. Task received [callback:worker_ready]')
+            else:
+                logger.info('Shutting down. Never received a Task [callback:worker_ready]')
+                raise WorkerShutdown()
+        return wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
+
+    @task_prerun.connect  # Task already got.
+    def _unset_watchdogs(*args, **kwargs):
+        # Worker is not received on this signal, direct or indirectly :/
+        worker = context['worker']
+
+        # New task should be rejected and returned if one was already processed.
+        worker.consumer.connection._default_channel.do_restore = True
+
+        worker.__task_received = True
+        logger.info('Task received! [task_prerun]')
+        cancel_wakeme()
+
+        if worker.__task_finished:  # Already worked one task? Reject and Shutdown!
+            logger.info('Rejecting a task and shutting down via WorkerShutdown() [task_prerun]')
+            raise WorkerShutdown()
+
+    @task_postrun.connect  # Task finished
+    def _demand_shutdown(*args, **kwargs):
+        worker = context['worker']
+        worker.__task_finished = True
+        logger.info('Job done. Now shutdown! [task_postrun]')
+
+        # Hack around "Worker shutdown creates duplicate messages in SQS broker"
+        # (applies to any broker, if I understand correctly)
+        # Celery issue #4002
+        # See: https://github.com/celery/celery/issues/4002#issuecomment-377111157
+        # See: https://gist.github.com/lovemyliwu/af5112de25b594205a76c3bfd00b9340
+        worker.consumer.connection._default_channel.do_restore = False
+
+        # Raising WorkerShutdown directly does not allow the worked task to be
+        # acknowledge()ed property, leading to duplicate runs. Solved by
+        # allowing the task to finish properly and raising a WorkerShutdown()
+        # after wait_job seconds or on @task_prerun, whatever comes first.
+        def _should_shutdown(*args, **kwargs):
+            logger.info('Shutting down via WorkerShutdown() [callback:task_postrun]')
+            raise WorkerShutdown()
+        return wakeme_soon(delay=wait_job, callback=_should_shutdown)
+
+    # Using weak references. Is up to the caller to store the callbacks produced
+    return [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _demand_shutdown]
