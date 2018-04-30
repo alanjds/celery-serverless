@@ -40,6 +40,8 @@ _post_handler_call_envvar = 'CELERY_SERVERLESS_POST_HANDLER_CALL'
 ### 1st hook call
 _maybe_call_hook(_pre_warmup_envvar, locals())
 
+from celery_serverless.extras import available_extras
+
 import json
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 
@@ -99,6 +101,11 @@ def worker(event, context):
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
 
+
+if 'sentry' in available_extras:
+    logger.debug('Applying Sentry serverless handler wrapper')
+    from celery_serverless.extras.sentry import client as _sentry_client
+    worker = _sentry_client.capture_exceptions(worker)
 
 ### 3rd hook call
 _maybe_call_hook(_post_handler_definition_envvar, locals())
