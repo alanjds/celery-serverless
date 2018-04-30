@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 available_extras = set()
 
+
 def discover_sentry():
     ## Sentry extras:
     SENTRY_DSN = os.environ.get('SENTRY_DSN')
@@ -15,19 +16,25 @@ def discover_sentry():
             import raven
         except ImportError:
             raise RuntimeError("Could not import 'raven'. Have you installed the the ['sentry'] extra?")
-        return 'sentry'
-    return None
+        return ['sentry']
 
 
-DISCOVER_FUNCTIONS = [discover_sentry]
+def discover_logdrain():
+    ## Lodrain extras:
+    LOGDRAIN_URL = os.environ.get('LOGDRAIN_URL')
+    if logdrain_url and not os.environ.get('CELERY_SERVERLESS_NO_LOGDRAIN'):
+        logger.info('Activating Logdrain extra support')
+        return ['logdrain']
 
+
+DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain]
 
 def discover_extras():
     available_extras.clear()
-    for func in [discover_sentry]:
+    for func in DISCOVER_FUNCTIONS:
         found = func()
         if found:
-            available_extras.add(found)
+            available_extras.extend(found)
     return available_extras
 
 # Initialize the extras registry
