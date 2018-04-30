@@ -22,7 +22,7 @@ def discover_sentry():
 def discover_logdrain():
     ## Lodrain extras:
     LOGDRAIN_URL = os.environ.get('LOGDRAIN_URL')
-    if logdrain_url and not os.environ.get('CELERY_SERVERLESS_NO_LOGDRAIN'):
+    if LOGDRAIN_URL and not os.environ.get('CELERY_SERVERLESS_NO_LOGDRAIN'):
         logger.info('Activating Logdrain extra support')
         return ['logdrain']
 
@@ -34,7 +34,7 @@ def discover_extras():
     for func in DISCOVER_FUNCTIONS:
         found = func()
         if found:
-            available_extras.extend(found)
+            available_extras.union(found)
     return available_extras
 
 # Initialize the extras registry
