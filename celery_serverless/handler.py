@@ -45,7 +45,7 @@ from celery_serverless.extras import available_extras
 if 'logdrain' in available_extras:
     logging.debug('Applying Logdrain extra')
     from celery_serverless.extras.logdrain import init_logdrain
-    logdrain_handler = init_logdrain()
+    init_logdrain()
 
 import json
 from celery_serverless.worker_management import spawn_worker, attach_hooks
