@@ -99,9 +99,9 @@ def worker(event, context):
         return {"statusCode": 200, "body": json.dumps(body)}
     except Exception as e:
         if 'sentry' in available_extras:
-            from celery_serverless.extras.sentry import client as _sentry_client
+            from celery_serverless.extras.sentry import get_sentry_client
             logger.warning('Sending exception collected to Sentry client')
-            _sentry_client.capture_exception()
+            get_sentry_client().capture_exception()
 
         ### Err hook call
         _maybe_call_hook(_error_handler_call_envvar, locals())
@@ -114,8 +114,8 @@ def worker(event, context):
 
 if 'sentry' in available_extras:
     logger.debug('Applying Sentry serverless handler wrapper extra')
-    from celery_serverless.extras.sentry import client as _sentry_client
-    worker = _sentry_client.capture_exceptions(worker)
+    from celery_serverless.extras.sentry import get_sentry_client
+    worker = get_sentry_client().capture_exceptions(worker)
 
 ### 3rd hook call
 _maybe_call_hook(_post_handler_definition_envvar, locals())
