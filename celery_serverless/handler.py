@@ -93,6 +93,11 @@ def worker(event, context):
         }
         return {"statusCode": 200, "body": json.dumps(body)}
     except Exception as e:
+        if 'sentry' in available_extras:
+            from celery_serverless.extras.sentry import client as _sentry_client
+            logger.warning('Sending exception collected to Sentry client')
+            _sentry_client.capture_exception()
+
         ### Err hook call
         _maybe_call_hook(_error_handler_call_envvar, locals())
         raise
