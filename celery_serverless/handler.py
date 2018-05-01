@@ -10,7 +10,10 @@ import logging
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel('DEBUG')
+logger.propagate = True
+if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
+    logger.setLevel(os.environ.get('CELERY_SERVERLESS_LOGLEVEL'))
+print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 
 def _maybe_call_hook(envname, locals_={}):
@@ -41,6 +44,7 @@ _post_handler_call_envvar = 'CELERY_SERVERLESS_POST_HANDLER_CALL'
 _maybe_call_hook(_pre_warmup_envvar, locals())
 
 from celery_serverless.extras import available_extras
+print('Available extras:', available_extras)
 
 if 'logdrain' in available_extras:
     logging.debug('Applying Logdrain extra')
