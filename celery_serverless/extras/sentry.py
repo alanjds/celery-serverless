@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 _client = None
 
 
-def init_sentry()
+def init_sentry():
     logger.debug('Initializing Sentry loghandler')
     client = LambdaClient(auto_log_stacks=True)
     loghandler = SentryHandler(client)
