@@ -34,7 +34,7 @@ def discover_extras():
     for func in DISCOVER_FUNCTIONS:
         found = func()
         if found:
-            available_extras.union(found)
+            available_extras.update(found)
     return available_extras
 
 # Initialize the extras registry
