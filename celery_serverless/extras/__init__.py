@@ -4,7 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-available_extras = set()
+available_extras = {}
 
 
 def discover_sentry():
@@ -16,15 +16,18 @@ def discover_sentry():
             import raven
         except ImportError:
             raise RuntimeError("Could not import 'raven'. Have you installed the the ['sentry'] extra?")
-        return ['sentry']
-
+        from celery_serverless.extras.sentry import get_sentry_client
+        return {'sentry': get_sentry_client()}
+    return {}
 
 def discover_logdrain():
     ## Lodrain extras:
     LOGDRAIN_URL = os.environ.get('LOGDRAIN_URL')
     if LOGDRAIN_URL and not os.environ.get('CELERY_SERVERLESS_NO_LOGDRAIN'):
         logger.info('Activating Logdrain extra support')
-        return ['logdrain']
+        from celery_serverless.extras.logdrain import init_logdrain
+        return {'logdrain': init_logdrain()}
+    return {}
 
 
 DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain]
@@ -32,10 +35,5 @@ DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain]
 def discover_extras():
     available_extras.clear()
     for func in DISCOVER_FUNCTIONS:
-        found = func()
-        if found:
-            available_extras.update(found)
+        available_extras.update(func())
     return available_extras
-
-# Initialize the extras registry
-discover_extras()
