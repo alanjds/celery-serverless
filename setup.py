@@ -59,11 +59,11 @@ setup(
     include_package_data=True,
     keywords='celery_serverless',
     name='celery-serverless',
-    packages=find_packages(include=['celery_serverless']),
+    packages=find_packages(),
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/alanjds/celery-serverless',
-    version='0.2.0',
+    version='0.2.1',
     zip_safe=False,
 )

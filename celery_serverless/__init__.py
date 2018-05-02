@@ -4,9 +4,9 @@
 
 __author__ = """Alan Justino & Samuel Barbosa Neto"""
 __email__ = 'alan.justino@yahoo.com.br'
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 
 # Hack: Allow `sls invoke local` to work correctly
-from .handler import worker as handler_worker
+from celery_serverless.handler import worker as handler_worker
 

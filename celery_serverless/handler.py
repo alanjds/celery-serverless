@@ -5,12 +5,16 @@ except ImportError:
     pass
 
 import os
+import sys
 import importlib
 import logging
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
-logger.setLevel('DEBUG')
+logger.propagate = True
+if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
+    logger.setLevel(os.environ.get('CELERY_SERVERLESS_LOGLEVEL'))
+print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 
 def _maybe_call_hook(envname, locals_={}):
@@ -39,6 +43,11 @@ _post_handler_call_envvar = 'CELERY_SERVERLESS_POST_HANDLER_CALL'
 
 ### 1st hook call
 _maybe_call_hook(_pre_warmup_envvar, locals())
+
+# Get and activate some extras
+from celery_serverless.extras import discover_extras
+available_extras = discover_extras()
+print('Available extras:', available_extras.keys(), file=sys.stderr)
 
 import json
 from celery_serverless.worker_management import spawn_worker, attach_hooks
@@ -91,6 +100,10 @@ def worker(event, context):
         }
         return {"statusCode": 200, "body": json.dumps(body)}
     except Exception as e:
+        if 'sentry' in available_extras:
+            logger.warning('Sending exception collected to Sentry client')
+            available_extras['sentry'].capture_exception()
+
         ### Err hook call
         _maybe_call_hook(_error_handler_call_envvar, locals())
         raise
@@ -99,6 +112,10 @@ def worker(event, context):
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
 
+
+if 'sentry' in available_extras:
+    logger.debug('Applying Sentry serverless handler wrapper extra')
+    worker = available_extras['sentry'].capture_exceptions(worker)
 
 ### 3rd hook call
 _maybe_call_hook(_post_handler_definition_envvar, locals())
