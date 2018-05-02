@@ -47,7 +47,7 @@ _maybe_call_hook(_pre_warmup_envvar, locals())
 # Get and activate some extras
 from celery_serverless.extras import discover_extras
 available_extras = discover_extras()
-print('Available extras:', available_extras.keys(), file=sys.stderr)
+print('Available extras:', list(available_extras.keys()), file=sys.stderr)
 
 import json
 from celery_serverless.worker_management import spawn_worker, attach_hooks
