@@ -102,7 +102,7 @@ def worker(event, context):
     except Exception as e:
         if 'sentry' in available_extras:
             logger.warning('Sending exception collected to Sentry client')
-            available_extras['sentry'].capture_exception()
+            available_extras['sentry'].captureException()
 
         ### Err hook call
         _maybe_call_hook(_error_handler_call_envvar, locals())
