@@ -53,6 +53,7 @@ def discover_wdb():
             raise RuntimeError("Could not import 'wdb'. Have you installed the the ['wdb'] extra?")
         from celery_serverless.extras.wdb import init_wdb
         return {'wdb': init_wdb()}
+    return {}
 
 
 DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain, discover_wdb]
