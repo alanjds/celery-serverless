@@ -24,6 +24,12 @@ def init_wdb():
         os.environ.setdefault('WDB_SOCKET_SERVER', str(parsed.hostname or ''))
         os.environ.setdefault('WDB_SOCKET_PORT', str(parsed.port or ''))
 
+    logger.debug(
+        'Using WDB_SOCKET_SERVER=%s WDB_SOCKET_PORT=%s',
+        os.environ['WDB_SOCKET_SERVER'],
+        os.environ['WDB_SOCKET_PORT'],
+    )
+
     logger.debug("Lowering the loglevel of 'importmagic.index'")
     importmagic_logger = logging.getLogger('importmagic.index')
     importmagic_logger.setLevel('ERROR')
