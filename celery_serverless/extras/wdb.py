@@ -13,7 +13,7 @@ def init_wdb():
         `tcp://serverhostname:port`
     """
     logger.debug('Initializing WDB support envvars')
-    os.environ['WDB_NO_BROWSER_AUTO_OPEN'] = True
+    os.environ['WDB_NO_BROWSER_AUTO_OPEN'] = 'True'
     WDB_SOCKET_URL = os.environ.get('WDB_SOCKET_URL')
 
     if WDB_SOCKET_URL:
@@ -21,7 +21,12 @@ def init_wdb():
         if parsed.scheme.partition('+')[0] != 'tcp':
             raise ValueError('WDB_SOCKET_URL format should be "tcp://serverhostname:port"')
 
-        os.environ.setdefault('WDB_SOCKET_SERVER', parsed.hostname)
-        os.environ.setdefault('WDB_SOCKET_PORT', parsed.port)
+        os.environ.setdefault('WDB_SOCKET_SERVER', str(parsed.hostname or ''))
+        os.environ.setdefault('WDB_SOCKET_PORT', str(parsed.port or ''))
+
+    logger.debug("Lowering the loglevel of 'importmagic.index'")
+    importmagic_logger = logging.getLogger('importmagic.index')
+    importmagic_logger.setLevel('ERROR')
+    importmagic_logger.propagate = False
 
     return {'start_trace': start_trace, 'stop_trace': stop_trace}
