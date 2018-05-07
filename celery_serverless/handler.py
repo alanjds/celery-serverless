@@ -62,6 +62,9 @@ def worker(event, context):
     global hooks
 
     request_id = '(unknown)'
+    if 'wdb' in available_extras:
+        available_extras['wdb']['start_trace']()
+
     try:
         ### 4th hook call
         _maybe_call_hook(_pre_handler_call_envvar, locals())
@@ -111,6 +114,9 @@ def worker(event, context):
         logger.info('END: Handle request ID: %s', request_id)
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
+
+        if 'wdb' in available_extras:
+            available_extras['wdb']['stop_trace']()
 
 
 if 'sentry' in available_extras:
