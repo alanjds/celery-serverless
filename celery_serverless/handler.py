@@ -64,6 +64,9 @@ def worker(event, context):
     request_id = '(unknown)'
     if 'wdb' in available_extras:
         available_extras['wdb']['start_trace']()
+        if available_extras['wdb']['breakpoint']:
+            import wdb
+            wdb.set_trace()
 
     try:
         ### 4th hook call

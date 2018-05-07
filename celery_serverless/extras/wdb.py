@@ -16,6 +16,7 @@ def init_wdb():
     logger.debug('Initializing WDB support envvars')
     os.environ['WDB_NO_BROWSER_AUTO_OPEN'] = 'True'
     WDB_SOCKET_URL = os.environ.get('WDB_SOCKET_URL')
+    CELERY_SERVERLESS_BREAKPOINT = os.environ.get('CELERY_SERVERLESS_BREAKPOINT')
 
     if WDB_SOCKET_URL:
         parsed = urlparse(WDB_SOCKET_URL)
@@ -37,4 +38,4 @@ def init_wdb():
     importmagic_logger.setLevel('ERROR')
     importmagic_logger.propagate = False
 
-    return {'start_trace': start_trace, 'stop_trace': stop_trace}
+    return {'start_trace': start_trace, 'stop_trace': stop_trace, 'breakpoint': CELERY_SERVERLESS_BREAKPOINT}
