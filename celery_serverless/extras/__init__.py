@@ -20,6 +20,7 @@ def discover_sentry():
         return {'sentry': get_sentry_client()}
     return {}
 
+
 def discover_logdrain():
     ## Lodrain extras:
     LOGDRAIN_URL = os.environ.get('LOGDRAIN_URL')
@@ -30,7 +31,31 @@ def discover_logdrain():
     return {}
 
 
-DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain]
+def discover_wdb():
+    ## Web Debugger extras:
+    WDB_SOCKET_SERVER = os.environ.get('WDB_SOCKET_SERVER')
+    WDB_SOCKET_PORT = os.environ.get('WDB_SOCKET_PORT')
+    WDB_SOCKET_URL = os.environ.get('WDB_SOCKET_URL')
+    if WDB_SOCKET_URL:
+        try:
+            WDB_SOCKET_URL, WDB_SOCKET_PORT = WDB_SOCKET_URL.rsplit(':')
+        except ValueError as err:
+            msg = str(err) + '. WDB_SOCKET_SERVER format should be "tcp://hostname:port"'
+            raise ValueError(msg) from err
+        WDB_SOCKET_URL = os.environ.setdefault('WDB_SOCKET_URL', WDB_SOCKET_URL)
+        WDB_SOCKET_PORT = os.environ.setdefault('WDB_SOCKET_PORT', WDB_SOCKET_PORT)
+
+    if WDB_SOCKET_SERVER and WDB_SOCKET_PORT and not os.environ.get('CELERY_SERVERLESS_NO_WDB'):
+        logger.info('Activating WDB (Web Debugger) extra support')
+        try:
+            import wdb
+        except ImportError:
+            raise RuntimeError("Could not import 'wdb'. Have you installed the the ['wdb'] extra?")
+        from celery_serverless.extras.wdb import init_wdb
+        return {'wdb': init_wdb()}
+
+
+DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain, discover_wdb]
 
 def discover_extras():
     available_extras.clear()
