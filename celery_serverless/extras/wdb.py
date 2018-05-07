@@ -2,6 +2,7 @@ import logging
 import os
 from urllib.parse import urlparse
 
+import wdb
 from wdb import start_trace, stop_trace
 
 logger = logging.getLogger(__name__)
@@ -21,8 +22,9 @@ def init_wdb():
         if parsed.scheme.partition('+')[0] != 'tcp':
             raise ValueError('WDB_SOCKET_URL format should be "tcp://serverhostname:port"')
 
-        os.environ.setdefault('WDB_SOCKET_SERVER', str(parsed.hostname or ''))
-        os.environ.setdefault('WDB_SOCKET_PORT', str(parsed.port or ''))
+        # I should not need to do it. Anyway is how it works...
+        wdb.SOCKET_SERVER = os.environ.setdefault('WDB_SOCKET_SERVER', str(parsed.hostname or ''))
+        wdb.SOCKET_PORT = int(os.environ.setdefault('WDB_SOCKET_PORT', str(parsed.port or '')))
 
     logger.debug(
         'Using WDB_SOCKET_SERVER=%s WDB_SOCKET_PORT=%s',
