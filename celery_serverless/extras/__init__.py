@@ -36,16 +36,9 @@ def discover_wdb():
     WDB_SOCKET_SERVER = os.environ.get('WDB_SOCKET_SERVER')
     WDB_SOCKET_PORT = os.environ.get('WDB_SOCKET_PORT')
     WDB_SOCKET_URL = os.environ.get('WDB_SOCKET_URL')
-    if WDB_SOCKET_URL:
-        try:
-            WDB_SOCKET_URL, WDB_SOCKET_PORT = WDB_SOCKET_URL.rsplit(':')
-        except ValueError as err:
-            msg = str(err) + '. WDB_SOCKET_SERVER format should be "tcp://hostname:port"'
-            raise ValueError(msg) from err
-        WDB_SOCKET_URL = os.environ.setdefault('WDB_SOCKET_URL', WDB_SOCKET_URL)
-        WDB_SOCKET_PORT = os.environ.setdefault('WDB_SOCKET_PORT', WDB_SOCKET_PORT)
 
-    if WDB_SOCKET_SERVER and WDB_SOCKET_PORT and not os.environ.get('CELERY_SERVERLESS_NO_WDB'):
+    needed_envs_available = bool(WDB_SOCKET_URL or (WDB_SOCKET_SERVER and WDB_SOCKET_PORT))
+    if needed_envs_available and not os.environ.get('CELERY_SERVERLESS_NO_WDB'):
         logger.info('Activating WDB (Web Debugger) extra support')
         try:
             import wdb
