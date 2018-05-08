@@ -180,4 +180,4 @@ def _get_awslambda_arn(lambda_name):
     for func in lambda_client.list_functions().get('Functions', []):
         if func['Handler'] == lambda_name and filter_string in func['FunctionName']:
             return func['FunctionArn']
-    raise RuntimeError('Function %s not found on service %s', lambda_name, filter_string)
+    raise RuntimeError('Handler %s not found deployed on service %s', lambda_name, filter_string)
