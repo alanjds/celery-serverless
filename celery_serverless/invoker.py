@@ -53,7 +53,8 @@ class Invoker(object):
         try:
             logs, future = invoker()  # Should raise exception on some problem
         except RuntimeError as err:
-            logger.warning('Invocation failed via "%s": %s', strategy, err.details)
+            logger.warning('Invocation failed via "%s": %s', strategy, getattr(err, 'details', ''))
+            return False, err
         return True, future
 
 
@@ -100,6 +101,7 @@ class Invoker(object):
 
     def _invoke_boto3(self, sync=False, executor='asyncio'):
         lambda_arn = _get_awslambda_arn(CELERY_HANDLER_PATH)
+        assert lambda_arn, 'An exeception should had raised on _get_awslambda_arn call.'
         logger.debug("Invoking via 'boto3' %s %s", 'sync' if sync else 'async', executor)
         future = None
         output = ''
@@ -176,5 +178,6 @@ def _get_serverless_name(config):
 @functools.lru_cache(8)
 def _get_awslambda_arn(lambda_name):
     for func in lambda_client.list_functions().get('Functions', []):
-        if func['Handler'] == lambda_name:
+        if func['Handler'] == lambda_name and filter_string in func['FunctionName']:
             return func['FunctionArn']
+    raise RuntimeError('Function %s not found on service %s', lambda_name, filter_string)
