@@ -62,6 +62,12 @@ def worker(event, context):
     global hooks
 
     request_id = '(unknown)'
+    if 'wdb' in available_extras:
+        available_extras['wdb']['start_trace']()
+        if available_extras['wdb']['breakpoint']:
+            import wdb
+            wdb.set_trace()
+
     try:
         ### 4th hook call
         _maybe_call_hook(_pre_handler_call_envvar, locals())
@@ -102,7 +108,7 @@ def worker(event, context):
     except Exception as e:
         if 'sentry' in available_extras:
             logger.warning('Sending exception collected to Sentry client')
-            available_extras['sentry'].capture_exception()
+            available_extras['sentry'].captureException()
 
         ### Err hook call
         _maybe_call_hook(_error_handler_call_envvar, locals())
@@ -111,6 +117,9 @@ def worker(event, context):
         logger.info('END: Handle request ID: %s', request_id)
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
+
+        if 'wdb' in available_extras:
+            available_extras['wdb']['stop_trace']()
 
 
 if 'sentry' in available_extras:
