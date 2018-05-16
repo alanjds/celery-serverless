@@ -68,14 +68,17 @@ def discover_s3conf():
 
 
 DISCOVER_FUNCTIONS = [
+    discover_s3conf,
     discover_sentry,
     discover_logdrain,
     discover_wdb,
-    discover_s3conf,
 ]
 
 def discover_extras():
+    _s3conf_extra = available_extras.pop('s3conf', {})
     available_extras.clear()
     for func in DISCOVER_FUNCTIONS:
+        if func is discover_s3conf and _s3conf_extra:
+            func = lambda: _s3conf_extra
         available_extras.update(func())
     return available_extras
