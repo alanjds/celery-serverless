@@ -49,6 +49,10 @@ from celery_serverless.extras import discover_extras
 available_extras = discover_extras()
 print('Available extras:', list(available_extras.keys()), file=sys.stderr)
 
+if 's3conf' in available_extras:
+    logger.debug('Applying S3CONF serverless environment extra')
+    available_extras.update(available_extras['s3conf']['apply']())
+
 import json
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 
