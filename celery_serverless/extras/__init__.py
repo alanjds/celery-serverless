@@ -67,7 +67,12 @@ def discover_s3conf():
     return {}
 
 
-DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain, discover_wdb, discover_s3conf]
+DISCOVER_FUNCTIONS = [
+    discover_sentry,
+    discover_logdrain,
+    discover_wdb,
+    discover_s3conf,
+]
 
 def discover_extras():
     available_extras.clear()
