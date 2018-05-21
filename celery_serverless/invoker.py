@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import unicode_literals, absolute_import
 
+import os
 import functools
 import logging
 import codecs
@@ -38,7 +39,7 @@ class Invoker(object):
     def __init__(self, config=None):
         self.config = config or get_config()
 
-    def invoke_main(self, strategy=''):
+    def invoke_main(self, strategy='', stage=''):
         if not strategy:
             strategy = self._infer_strategy()
 
@@ -50,13 +51,25 @@ class Invoker(object):
         else:
             raise NotImplementedError("Could not find a way to invoke via '%s' strategy" % strategy)
 
+        if not stage:
+            stage = self._get_stage()
+
         try:
-            logs, future = invoker()  # Should raise exception on some problem
+            logs, future = invoker(stage=stage)  # Should raise exception on some problem
         except RuntimeError as err:
             logger.warning('Invocation failed via "%s": %s', strategy, getattr(err, 'details', ''))
             return False, err
         return True, future
 
+    def _get_stage(self):
+        stage = os.environ.get('CELERY_SERVERLESS_STAGE')
+        if not stage:
+            stage = self.config.get('stage')
+        if not stage:
+            stage = self.config['provider'].get('stage')
+        if not stage:
+            stage = 'dev'    # Default stage
+        return stage
 
     def _infer_strategy(self):
         if self.config['provider']['name'] == 'aws':
@@ -66,12 +79,13 @@ class Invoker(object):
                 logger.warning("Invoke strategy 'boto3' could not be used. Falling back to 'serverless'")
         return 'serverless'
 
-
-    def _invoke_serverless(self, local=False):
+    def _invoke_serverless(self, stage='', local=False):
         name = _get_serverless_name(self.config)
         command = 'serverless invoke'
         if local:
             command += ' local'
+        if stage:
+            command += ' --stage %s' % stage
 
         logger.debug("Invoking via 'serverless'")
         command += ' --log --verbose --function %s' % name
@@ -98,9 +112,10 @@ class Invoker(object):
             raise error
         return output, None
 
-
-    def _invoke_boto3(self, sync=False, executor='asyncio'):
-        lambda_arn = _get_awslambda_arn(CELERY_HANDLER_PATH)
+    def _invoke_boto3(self, stage='', sync=False, executor='asyncio'):
+        stage = stage or self._get_stage()
+        filter_string = '%s-%s-' % (self.config['service'], stage)
+        lambda_arn = _get_awslambda_arn(CELERY_HANDLER_PATH, filter_string)
         assert lambda_arn, 'An exeception should had raised on _get_awslambda_arn call.'
         logger.debug("Invoking via 'boto3' %s %s", 'sync' if sync else 'async', executor)
         future = None
@@ -176,8 +191,8 @@ def _get_serverless_name(config):
 
 
 @functools.lru_cache(8)
-def _get_awslambda_arn(lambda_name):
+def _get_awslambda_arn(handler_name, filter_string):
     for func in lambda_client.list_functions().get('Functions', []):
-        if func['Handler'] == lambda_name and filter_string in func['FunctionName']:
+        if func['Handler'] == handler_name and filter_string in func['FunctionName']:
             return func['FunctionArn']
-    raise RuntimeError('Handler %s not found deployed on service %s', lambda_name, filter_string)
+    raise RuntimeError('Handler %s not found deployed on service %s', handler_name, filter_string)
