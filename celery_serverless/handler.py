@@ -64,9 +64,11 @@ def worker(event, context):
     request_id = '(unknown)'
     if 'wdb' in available_extras:
         available_extras['wdb']['start_trace']()
+        # Will be True if CELERY_SERVERLESS_BREAKPOINT is defined.
+        # It is the preferred way to force a breakpoint.
         if available_extras['wdb']['breakpoint']:
             import wdb
-            wdb.set_trace()
+            wdb.set_trace()  # Tip: you may want to step into spawn_worker() near line 100 ;)
 
     try:
         ### 4th hook call
@@ -93,6 +95,8 @@ def worker(event, context):
         else:
             logger.debug('Old Celery worker. Already have hooks.')
 
+        # The Celery worker will start here. Will connect, take 1 (one) task,
+        # process it, and quit.
         logger.debug('Spawning the worker(s)')
         spawn_worker(
             softlimit=softlimit if softlimit > 5 else None,
