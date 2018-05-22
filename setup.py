@@ -56,6 +56,9 @@ setup(
         'wdb': [
             'wdb>=3.2.1',
         ],
+        'sentry': [
+            'sentry>=6.5.0',
+        ],
     },
     license="Apache Software License 2.0",
     long_description=readme,
