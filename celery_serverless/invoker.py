@@ -192,7 +192,13 @@ def _get_serverless_name(config):
 
 @functools.lru_cache(8)
 def _get_awslambda_arn(handler_name, filter_string):
-    for func in lambda_client.list_functions().get('Functions', []):
+    def _functions():
+        for page in lambda_client.get_paginator('list_functions').paginate():
+            for f in page.get('Functions', []):
+                yield f
+
+    for func in _functions():
         if func['Handler'] == handler_name and filter_string in func['FunctionName']:
             return func['FunctionArn']
+
     raise RuntimeError('Handler %s not found deployed on service %s', handler_name, filter_string)
