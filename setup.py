@@ -56,6 +56,9 @@ setup(
         'wdb': [
             'wdb>=3.2.1',
         ],
+        'sentry': [
+            'sentry>=6.5.0',
+        ],
         's3conf': [
             's3conf>=0.6.0',
         ],

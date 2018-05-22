@@ -33,6 +33,9 @@ def init_wdb():
         os.environ['WDB_SOCKET_PORT'],
     )
 
+    # See: https://github.com/Kozea/wdb/pull/98#issue-130738238
+    # importmagic.index spams the console on every new import. Is annoying,
+    # but on Lambdas it can cost a lot of money too.
     logger.debug("Lowering the loglevel of 'importmagic.index'")
     importmagic_logger = logging.getLogger('importmagic.index')
     importmagic_logger.setLevel('ERROR')
