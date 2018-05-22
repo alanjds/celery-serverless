@@ -35,6 +35,32 @@ from .utils import run_aio_on_thread
 CELERY_HANDLER_PATH = 'celery_serverless.handler_worker'
 
 
+def _get_serverless_name(config):
+    for name, options in config['functions'].items():
+        if options.get('handler') == CELERY_HANDLER_PATH:
+            return name
+
+    raise RuntimeError((
+        "Handler '%s' not found on serverless.yml.\n"
+        "Please fix it or run 'celery serverless init' to recreate one"
+    ) % CELERY_HANDLER_PATH)
+
+
+@functools.lru_cache(8)
+def _get_awslambda_arn(function_name):
+    import ipdb; ipdb.set_trace()
+    def _functions():
+        for page in lambda_client.get_paginator('list_functions').paginate():
+            for f in page.get('Functions', []):
+                yield f
+
+    for func in _functions():
+        if func['FunctionName'] == function_name:
+            return func['FunctionArn']
+
+    raise RuntimeError('Handler %s not found deployed on service %s', handler_name, filter_string)
+
+
 class Invoker(object):
     def __init__(self, config=None):
         self.config = config or get_config()
@@ -114,8 +140,9 @@ class Invoker(object):
 
     def _invoke_boto3(self, stage='', sync=False, executor='asyncio'):
         stage = stage or self._get_stage()
-        filter_string = '%s-%s-' % (self.config['service'], stage)
-        lambda_arn = _get_awslambda_arn(CELERY_HANDLER_PATH, filter_string)
+        function_name = '%s-%s-%s' % (self.config['service'], stage,
+                                      _get_serverless_name(self.config))
+        lambda_arn = _get_awslambda_arn(function_name)
         assert lambda_arn, 'An exeception should had raised on _get_awslambda_arn call.'
         logger.debug("Invoking via 'boto3' %s %s", 'sync' if sync else 'async', executor)
         future = None
@@ -177,28 +204,3 @@ class Invoker(object):
 
 def invoke(config=None, *args, **kwargs):
     return Invoker(config=config).invoke_main(*args, **kwargs)
-
-
-def _get_serverless_name(config):
-    for name, options in config['functions'].items():
-        if options.get('handler') == CELERY_HANDLER_PATH:
-            return name
-
-    raise RuntimeError((
-        "Handler '%s' not found on serverless.yml.\n"
-        "Please fix it or run 'celery serverless init' to recreate one"
-    ) % CELERY_HANDLER_PATH)
-
-
-@functools.lru_cache(8)
-def _get_awslambda_arn(handler_name, filter_string):
-    def _functions():
-        for page in lambda_client.get_paginator('list_functions').paginate():
-            for f in page.get('Functions', []):
-                yield f
-
-    for func in _functions():
-        if func['Handler'] == handler_name and filter_string in func['FunctionName']:
-            return func['FunctionArn']
-
-    raise RuntimeError('Handler %s not found deployed on service %s', handler_name, filter_string)
