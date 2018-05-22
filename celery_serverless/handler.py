@@ -62,6 +62,14 @@ def worker(event, context):
     global hooks
 
     request_id = '(unknown)'
+    if 'wdb' in available_extras:
+        available_extras['wdb']['start_trace']()
+        # Will be True if CELERY_SERVERLESS_BREAKPOINT is defined.
+        # It is the preferred way to force a breakpoint.
+        if available_extras['wdb']['breakpoint']:
+            import wdb
+            wdb.set_trace()  # Tip: you may want to step into spawn_worker() near line 100 ;)
+
     try:
         ### 4th hook call
         _maybe_call_hook(_pre_handler_call_envvar, locals())
@@ -87,6 +95,8 @@ def worker(event, context):
         else:
             logger.debug('Old Celery worker. Already have hooks.')
 
+        # The Celery worker will start here. Will connect, take 1 (one) task,
+        # process it, and quit.
         logger.debug('Spawning the worker(s)')
         spawn_worker(
             softlimit=softlimit if softlimit > 5 else None,
@@ -102,7 +112,7 @@ def worker(event, context):
     except Exception as e:
         if 'sentry' in available_extras:
             logger.warning('Sending exception collected to Sentry client')
-            available_extras['sentry'].capture_exception()
+            available_extras['sentry'].captureException()
 
         ### Err hook call
         _maybe_call_hook(_error_handler_call_envvar, locals())
@@ -111,6 +121,9 @@ def worker(event, context):
         logger.info('END: Handle request ID: %s', request_id)
         ### 5th hook call
         _maybe_call_hook(_post_handler_call_envvar, locals())
+
+        if 'wdb' in available_extras:
+            available_extras['wdb']['stop_trace']()
 
 
 if 'sentry' in available_extras:
