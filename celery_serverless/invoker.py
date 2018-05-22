@@ -48,7 +48,6 @@ def _get_serverless_name(config):
 
 @functools.lru_cache(8)
 def _get_awslambda_arn(function_name):
-    import ipdb; ipdb.set_trace()
     def _functions():
         for page in lambda_client.get_paginator('list_functions').paginate():
             for f in page.get('Functions', []):
