@@ -27,6 +27,7 @@ available_extras = discover_extras()
 print('Available extras:', list(available_extras.keys()), file=sys.stderr)
 
 from celery_serverless.worker_management import spawn_worker, attach_hooks
+from celery_serverless import watchdog as watchdog_module
 
 hooks = []
 
@@ -65,6 +66,17 @@ def worker(event, context):
     logger.debug('Cleaning up before exit')
     body = {
         "message": "Celery worker worked, lived, and died.",
+    }
+    return {"statusCode": 200, "body": json.dumps(body)}
+
+
+@handler_wrapper(available_extras)
+def watchdog(event, context):
+    watchdog_module.monitor()
+
+    logger.debug('Cleaning up before exit')
+    body = {
+        "message": "Watchdog woke, worked, and rested.",
     }
     return {"statusCode": 200, "body": json.dumps(body)}
 
