@@ -67,7 +67,7 @@ def discover_extras():
 
 def maybe_apply_sentry(available_extras):
     if callable(available_extras):
-        raise TypeError("Should initialize the decorator with 'available_extras' iterable, not %s", available_extras)
+        raise TypeError("Should initialize the decorator with 'available_extras' map, not %s", type(available_extras))
 
     def _decorator(fn):
         @functools.wraps(fn)
@@ -76,4 +76,4 @@ def maybe_apply_sentry(available_extras):
                 logger.debug('Applying Sentry serverless handler wrapper extra')
                 fn = available_extras['sentry'].capture_exceptions(fn)
             return fn
-    return _applyer
+    return _decorator
