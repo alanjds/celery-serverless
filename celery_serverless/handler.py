@@ -21,7 +21,7 @@ print('Celery serverless loglevel:', logger.getEffectiveLevel())
 maybe_call_hook(ENVVARS['pre_warmup_envvar'], locals())
 
 # Get and activate some extras
-from celery_serverless.extras import discover_extras
+from celery_serverless.extras import discover_extras, maybe_apply_sentry
 available_extras = discover_extras()
 print('Available extras:', list(available_extras.keys()), file=sys.stderr)
 
@@ -34,6 +34,7 @@ hooks = []
 maybe_call_hook(ENVVARS['pre_handler_definition', locals())
 
 
+@maybe_apply_sentry(available_extras)
 def worker(event, context):
     global hooks
 
@@ -101,10 +102,6 @@ def worker(event, context):
         if 'wdb' in available_extras:
             available_extras['wdb']['stop_trace']()
 
-
-if 'sentry' in available_extras:
-    logger.debug('Applying Sentry serverless handler wrapper extra')
-    worker = available_extras['sentry'].capture_exceptions(worker)
 
 ### 3rd hook call
 maybe_call_hook(ENVVARS['post_handler_definition'], locals())
