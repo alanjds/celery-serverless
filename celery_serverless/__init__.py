@@ -8,5 +8,7 @@ __version__ = '0.2.1'
 
 
 # Hack: Allow `sls invoke local` to work correctly
-from celery_serverless.handler import worker as handler_worker
-
+from celery_serverless.handler import (
+    worker as handler_worker,
+    watchdog as handler_watchdog,
+)

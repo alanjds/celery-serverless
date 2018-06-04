@@ -6,10 +6,11 @@ except ImportError:
 
 import os
 import sys
-import importlib
+import json
 import logging
 
-logging.basicConfig()
+from .handler_utils import maybe_call_hook, import_callable, handler_wrapper, ENVVAR_NAMES
+
 logger = logging.getLogger(__name__)
 logger.propagate = True
 if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
@@ -17,32 +18,8 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 
-def _maybe_call_hook(envname, locals_={}):
-    func_path = os.environ.get(envname)
-    logger.debug("Trying the hook %s: '%s'", envname, func_path or '(not set)')
-    func = _import_callable(func_path)
-    return func(locals_=locals_) if func else None
-
-
-def _import_callable(name):
-    result = None
-    if name:
-        logging.info("Importing hook '%s'", name)
-        module_name, split, callable_name = name.rpartition(':')
-        module = importlib.import_module(module_name)
-        result = getattr(module, callable_name)
-    return result if callable(result) else None
-
-
-_pre_warmup_envvar = 'CELERY_SERVERLESS_PRE_WARMUP'
-_pre_handler_definition_envvar = 'CELERY_SERVERLESS_PRE_HANDLER_DEFINITION'
-_post_handler_definition_envvar = 'CELERY_SERVERLESS_POST_HANDLER_DEFINITION'
-_pre_handler_call_envvar = 'CELERY_SERVERLESS_PRE_HANDLER_CALL'
-_error_handler_call_envvar = 'CELERY_SERVERLESS_ERROR_HANDLER_CALL'
-_post_handler_call_envvar = 'CELERY_SERVERLESS_POST_HANDLER_CALL'
-
 ### 1st hook call
-_maybe_call_hook(_pre_warmup_envvar, locals())
+maybe_call_hook(ENVVAR_NAMES['pre_warmup_envvar'], locals())
 
 # Get and activate some extras, starting by environment-related ones
 from celery_serverless.extras import discover_extras, discover_s3conf
@@ -58,86 +35,60 @@ available_extras = discover_extras()
 available_extras.update(_s3conf_result)  # can be an empty {}
 print('Available extras:', list(available_extras.keys()), file=sys.stderr)
 
-import json
 from celery_serverless.worker_management import spawn_worker, attach_hooks
+from celery_serverless import watchdog as watchdog_module
 
 hooks = []
 
 ### 2nd hook call
-_maybe_call_hook(_pre_handler_definition_envvar, locals())
+maybe_call_hook(ENVVAR_NAMES['pre_handler_definition'], locals())
 
 
+@handler_wrapper(available_extras)
 def worker(event, context):
     global hooks
 
-    request_id = '(unknown)'
-    if 'wdb' in available_extras:
-        available_extras['wdb']['start_trace']()
-        # Will be True if CELERY_SERVERLESS_BREAKPOINT is defined.
-        # It is the preferred way to force a breakpoint.
-        if available_extras['wdb']['breakpoint']:
-            import wdb
-            wdb.set_trace()  # Tip: you may want to step into spawn_worker() near line 100 ;)
-
     try:
-        ### 4th hook call
-        _maybe_call_hook(_pre_handler_call_envvar, locals())
-
-        try:
-            request_id = context.aws_request_id
-        except AttributeError:
-            pass
-        logger.info('START: Handle request ID: %s', request_id)
-
-        try:
-            remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
-        except Exception as e:
-            logger.exception('Could not got remaining_seconds. Is the context right?')
-            remaining_seconds = 5 * 60 # 5 minutes by default
-
-        softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
-        hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
-
-        if not hooks:
-            logger.debug('Fresh Celery worker. Attach hooks!')
-            hooks = attach_hooks()
-        else:
-            logger.debug('Old Celery worker. Already have hooks.')
-
-        # The Celery worker will start here. Will connect, take 1 (one) task,
-        # process it, and quit.
-        logger.debug('Spawning the worker(s)')
-        spawn_worker(
-            softlimit=softlimit if softlimit > 5 else None,
-            hardlimit=hardlimit if hardlimit > 5 else None,
-            loglevel='DEBUG',
-        )  # Will block until one task got processed
-
-        logger.debug('Cleaning up before exit')
-        body = {
-            "message": "Celery worker worked, lived, and died.",
-        }
-        return {"statusCode": 200, "body": json.dumps(body)}
+        remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
     except Exception as e:
-        if 'sentry' in available_extras:
-            logger.warning('Sending exception collected to Sentry client')
-            available_extras['sentry'].captureException()
+        logger.exception('Could not got remaining_seconds. Is the context right?')
+        remaining_seconds = 5 * 60 # 5 minutes by default
 
-        ### Err hook call
-        _maybe_call_hook(_error_handler_call_envvar, locals())
-        raise
-    finally:
-        logger.info('END: Handle request ID: %s', request_id)
-        ### 5th hook call
-        _maybe_call_hook(_post_handler_call_envvar, locals())
+    softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
+    hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
 
-        if 'wdb' in available_extras:
-            available_extras['wdb']['stop_trace']()
+    if not hooks:
+        logger.debug('Fresh Celery worker. Attach hooks!')
+        hooks = attach_hooks()
+    else:
+        logger.debug('Old Celery worker. Already have hooks.')
+
+    # The Celery worker will start here. Will connect, take 1 (one) task,
+    # process it, and quit.
+    logger.debug('Spawning the worker(s)')
+    spawn_worker(
+        softlimit=softlimit if softlimit > 5 else None,
+        hardlimit=hardlimit if hardlimit > 5 else None,
+        loglevel='DEBUG',
+    )  # Will block until one task got processed
+
+    logger.debug('Cleaning up before exit')
+    body = {
+        "message": "Celery worker worked, lived, and died.",
+    }
+    return {"statusCode": 200, "body": json.dumps(body)}
 
 
-if 'sentry' in available_extras:
-    logger.debug('Applying Sentry serverless handler wrapper extra')
-    worker = available_extras['sentry'].capture_exceptions(worker)
+@handler_wrapper(available_extras)
+def watchdog(event, context):
+    watchdog_module.monitor()
+
+    logger.debug('Cleaning up before exit')
+    body = {
+        "message": "Watchdog woke, worked, and rested.",
+    }
+    return {"statusCode": 200, "body": json.dumps(body)}
+
 
 ### 3rd hook call
-_maybe_call_hook(_post_handler_definition_envvar, locals())
+maybe_call_hook(ENVVARS['post_handler_definition'], locals())

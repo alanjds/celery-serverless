@@ -1,11 +1,14 @@
 # coding: utf-8
 import os
+import functools
 import logging
 
 logger = logging.getLogger(__name__)
 
 available_extras = {}
 
+
+## Discoverables:
 
 def discover_sentry():
     ## Sentry extras:
@@ -66,6 +69,8 @@ def discover_s3conf():
         }
     return {}
 
+    
+## Discoverer
 
 DISCOVER_FUNCTIONS = [
     discover_s3conf,
@@ -82,3 +87,19 @@ def discover_extras():
             func = lambda: _s3conf_extra
         available_extras.update(func())
     return available_extras
+
+
+## Helpers
+
+def maybe_apply_sentry(available_extras):
+    if callable(available_extras):
+        raise TypeError("Should initialize the decorator with 'available_extras' map, not %s", type(available_extras))
+
+    def _decorator(fn):
+        @functools.wraps(fn)
+        def _final_func(fn):
+            if 'sentry' in available_extras:
+                logger.debug('Applying Sentry serverless handler wrapper extra')
+                fn = available_extras['sentry'].capture_exceptions(fn)
+            return fn
+    return _decorator
