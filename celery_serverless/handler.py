@@ -6,6 +6,7 @@ except ImportError:
 
 import os
 import sys
+import json
 import logging
 
 from .handler_utils import maybe_call_hook, import_callable, handler_wrapper, ENVVAR_NAMES
