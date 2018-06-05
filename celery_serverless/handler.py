@@ -21,9 +21,18 @@ print('Celery serverless loglevel:', logger.getEffectiveLevel())
 ### 1st hook call
 maybe_call_hook(ENVVAR_NAMES['pre_warmup'], locals())
 
-# Get and activate some extras
-from celery_serverless.extras import discover_extras
+# Get and activate some extras, starting by environment-related ones
+from celery_serverless.extras import discover_extras, discover_s3conf
+_s3conf_result = discover_s3conf()   # {} or {'s3conf': ...}
+if _s3conf_result:
+    # Should be the 1st one called because can set the environment
+    # Then the next ones can be discovered based on s3conf results
+    logger.debug('Applying S3CONF serverless environment extra')
+    _s3conf_result = {'s3conf': _s3conf_result['s3conf']['apply']()}
+
+# The environment could have changed. Now we can discover the extras.
 available_extras = discover_extras()
+available_extras.update(_s3conf_result)  # can be an empty {}
 print('Available extras:', list(available_extras.keys()), file=sys.stderr)
 
 from celery_serverless.worker_management import spawn_worker, attach_hooks
