@@ -56,8 +56,11 @@ setup(
         'wdb': [
             'wdb>=3.2.1',
         ],
+        'logdrain': [
+            'raven>=6.5.0',
+        ],
         'sentry': [
-            'sentry>=6.5.0',
+            'raven>=6.5.0',
         ],
         's3conf': [
             's3conf>=0.6.0',
