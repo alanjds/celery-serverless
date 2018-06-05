@@ -36,7 +36,7 @@ available_extras.update(_s3conf_result)  # can be an empty {}
 print('Available extras:', list(available_extras.keys()), file=sys.stderr)
 
 from celery_serverless.worker_management import spawn_worker, attach_hooks
-from celery_serverless import watchdog as watchdog_module
+from celery_serverless.watchdog import Watchdog
 
 hooks = []
 
@@ -81,7 +81,7 @@ def worker(event, context):
 
 @handler_wrapper(available_extras)
 def watchdog(event, context):
-    watchdog_module.monitor()
+    Watchdog().monitor()
 
     logger.debug('Cleaning up before exit')
     body = {
