@@ -57,10 +57,10 @@ setup(
             'wdb>=3.2.1',
         ],
         'logdrain': [
-            'sentry>=6.5.0',
+            'raven>=6.5.0',
         ],
         'sentry': [
-            'sentry>=6.5.0',
+            'raven>=6.5.0',
         ],
     },
     license="Apache Software License 2.0",
