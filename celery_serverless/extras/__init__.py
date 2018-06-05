@@ -26,6 +26,10 @@ def discover_logdrain():
     LOGDRAIN_URL = os.environ.get('LOGDRAIN_URL')
     if LOGDRAIN_URL and not os.environ.get('CELERY_SERVERLESS_NO_LOGDRAIN'):
         logger.info('Activating Logdrain extra support')
+        try:
+            import raven
+        except ImportError:
+            raise RuntimeError("Could not import 'raven'. Have you installed the the ['logdrain'] extra?")
         from celery_serverless.extras.logdrain import init_logdrain
         return {'logdrain': init_logdrain()}
     return {}
