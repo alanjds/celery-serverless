@@ -62,6 +62,9 @@ setup(
         'sentry': [
             'raven>=6.5.0',
         ],
+        's3conf': [
+            's3conf>=0.6.0',
+        ],
     },
     license="Apache Software License 2.0",
     long_description=readme,

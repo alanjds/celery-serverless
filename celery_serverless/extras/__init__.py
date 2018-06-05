@@ -53,10 +53,36 @@ def discover_wdb():
     return {}
 
 
-DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain, discover_wdb]
+def discover_s3conf():
+    ## S3Conf extras:
+    S3CONF = os.environ.get('S3CONF')
+    if S3CONF and not os.environ.get('CELERY_SERVERLESS_NO_S3CONF'):
+        logger.info('Activating S3CONF extra support')
+        try:
+            import s3conf
+        except ImportError:
+            raise RuntimeError("Could not import 's3conf'. Have you installed the the ['s3conf'] extra?")
+        from celery_serverless.extras.s3conf import init_s3conf
+        return {
+            's3conf': {
+                'apply':init_s3conf,
+            }
+        }
+    return {}
+
+
+DISCOVER_FUNCTIONS = [
+    discover_s3conf,
+    discover_sentry,
+    discover_logdrain,
+    discover_wdb,
+]
 
 def discover_extras():
+    _s3conf_extra = available_extras.pop('s3conf', {})
     available_extras.clear()
     for func in DISCOVER_FUNCTIONS:
+        if func is discover_s3conf and _s3conf_extra:
+            func = lambda: _s3conf_extra
         available_extras.update(func())
     return available_extras
