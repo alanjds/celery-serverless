@@ -45,8 +45,8 @@ def handler_wrapper(available_extras):
         raise TypeError("Should initialize the decorator with 'available_extras' map, not %s", type(available_extras))
 
     def _decorator(fn):
-        @maybe_apply_sentry(available_extras)
         @functools.wraps(fn)
+        @maybe_apply_sentry(available_extras)
         def _handler(event, context):
             request_id = '(unknown)'
             try:
