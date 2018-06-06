@@ -85,11 +85,14 @@ DISCOVER_FUNCTIONS = [
 
 def discover_extras(apply_s3conf=False):
     # S3CONF is special. It is slower and change the others. Save it for later.
-    s3conf_extra = {'s3conf': available_extras.get('s3conf', {})}
+    if 's3conf' in available_extras:
+        s3conf_extra = {'s3conf': available_extras['s3conf']}
+    else:
+        s3conf_extra = {}
 
     # Get and activate some extras, starting by environment-related ones
     if apply_s3conf:
-        if not s3conf_extra['s3conf']:
+        if not s3conf_extra:
             s3conf_extra = discover_s3conf()   # {} or {'s3conf': ...}
 
         if s3conf_extra.get('s3conf', {}).get('apply'):  # Available and not applyed
@@ -100,7 +103,7 @@ def discover_extras(apply_s3conf=False):
 
     available_extras.clear()
     for func in DISCOVER_FUNCTIONS:
-        if func is discover_s3conf and s3conf_extra.get('s3conf'):  # Reuse slow task if possible
+        if func is discover_s3conf and s3conf_extra:  # Reuse slow task if possible
             func = lambda: s3conf_extra
         available_extras.update(func())
     return available_extras
