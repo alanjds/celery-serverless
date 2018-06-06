@@ -8,9 +8,9 @@ logger = logging.getLogger(__name__)
 logger.propagate = True
 if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
     logger.setLevel(os.environ.get('CELERY_SERVERLESS_LOGLEVEL'))
-print('Celery serverless loglevel:', logger.getEffectiveLevel())
+print('Celery serverless handlers loglevel:', logger.getEffectiveLevel())
 
-from celery_serverless.extras import maybe_apply_sentry
+from celery_serverless.extras import discover_extras, maybe_apply_sentry
 
 
 ENVVAR_NAMES = {
@@ -40,48 +40,45 @@ def import_callable(name):
     return result if callable(result) else None
 
 
-def handler_wrapper(available_extras):
-    if callable(available_extras):
-        raise TypeError("Should initialize the decorator with 'available_extras' map, not %s", type(available_extras))
+def handler_wrapper(fn):
+    available_extras = discover_extras()
 
-    def _decorator(fn):
-        @functools.wraps(fn)
-        @maybe_apply_sentry(available_extras)
-        def _handler(event, context):
-            request_id = '(unknown)'
+    @functools.wraps(fn)
+    @maybe_apply_sentry(available_extras)
+    def _handler(event, context):
+        request_id = '(unknown)'
+        try:
+            if 'wdb' in available_extras:
+                available_extras['wdb']['start_trace']()
+                # Will be True if CELERY_SERVERLESS_BREAKPOINT is defined.
+                # It is the preferred way to force a breakpoint.
+                if available_extras['wdb']['breakpoint']:
+                    import wdb
+                    wdb.set_trace()  # Tip: you may want to step into fn() near line 70 ;)
+
+            ### 4th hook call
+            maybe_call_hook(ENVVAR_NAMES['pre_handler_call'], locals())
+
             try:
-                if 'wdb' in available_extras:
-                    available_extras['wdb']['start_trace']()
-                    # Will be True if CELERY_SERVERLESS_BREAKPOINT is defined.
-                    # It is the preferred way to force a breakpoint.
-                    if available_extras['wdb']['breakpoint']:
-                        import wdb
-                        wdb.set_trace()  # Tip: you may want to step into fn() near line 70 ;)
+                request_id = context.aws_request_id
+            except AttributeError:
+                pass
+            logger.info('START: Handle request ID: %s', request_id)
 
-                ### 4th hook call
-                maybe_call_hook(ENVVAR_NAMES['pre_handler_call'], locals())
+            return fn(event, context)
+        except Exception as e:
+            if 'sentry' in available_extras:
+                logger.warning('Sending exception collected to Sentry client')
+                available_extras['sentry'].captureException()
 
-                try:
-                    request_id = context.aws_request_id
-                except AttributeError:
-                    pass
-                logger.info('START: Handle request ID: %s', request_id)
+            ### Err hook call
+            maybe_call_hook(ENVVAR_NAMES['error_handler_call'], locals())
+            raise
+        finally:
+            logger.info('END: Handle request ID: %s', request_id)
+            ### 5th hook call
+            maybe_call_hook(ENVVAR_NAMES['post_handler_call'], locals())
 
-                return fn(event, context)
-            except Exception as e:
-                if 'sentry' in available_extras:
-                    logger.warning('Sending exception collected to Sentry client')
-                    available_extras['sentry'].captureException()
-
-                ### Err hook call
-                maybe_call_hook(ENVVAR_NAMES['error_handler_call'], locals())
-                raise
-            finally:
-                logger.info('END: Handle request ID: %s', request_id)
-                ### 5th hook call
-                maybe_call_hook(ENVVAR_NAMES['post_handler_call'], locals())
-
-                if 'wdb' in available_extras:
-                    available_extras['wdb']['stop_trace']()
-        return _handler
-    return _decorator
+            if 'wdb' in available_extras:
+                available_extras['wdb']['stop_trace']()
+    return _handler

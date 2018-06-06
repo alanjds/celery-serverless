@@ -77,18 +77,31 @@ def discover_s3conf():
 ## Discoverer
 
 DISCOVER_FUNCTIONS = [
-    discover_s3conf,
+    discover_s3conf,  # Will be handled directly, as changes other extras availability
     discover_sentry,
     discover_logdrain,
     discover_wdb,
 ]
 
-def discover_extras():
-    _s3conf_extra = available_extras.pop('s3conf', {})
+def discover_extras(apply_s3conf=False):
+    # S3CONF is special. It is slower and change the others. Save it for later.
+    s3conf_extra = {'s3conf': available_extras.get('s3conf', {})}
+
+    # Get and activate some extras, starting by environment-related ones
+    if apply_s3conf:
+        if not s3conf_extra['s3conf']:
+            s3conf_extra = discover_s3conf()   # {} or {'s3conf': ...}
+
+        if s3conf_extra.get('s3conf', {}).get('apply'):  # Available and not applyed
+            # Should be the 1st one called because can set the environment
+            # Then the next ones can be discovered based on s3conf results
+            logger.debug('Applying S3CONF serverless environment extra')
+            s3conf_extra = {'s3conf': s3conf_extra['s3conf'].pop('apply')()}
+
     available_extras.clear()
     for func in DISCOVER_FUNCTIONS:
-        if func is discover_s3conf and _s3conf_extra:
-            func = lambda: _s3conf_extra
+        if func is discover_s3conf and s3conf_extra.get('s3conf'):  # Reuse slow task if possible
+            func = lambda: s3conf_extra
         available_extras.update(func())
     return available_extras
 
