@@ -23,14 +23,14 @@ ENVVAR_NAMES = {
 }
 
 
-def maybe_call_hook(envname, locals_={}):
+def _maybe_call_hook(envname, locals_={}):
     func_path = os.environ.get(envname)
     logger.debug("Trying the hook %s: '%s'", envname, func_path or '(not set)')
-    func = import_callable(func_path)
+    func = _import_callable(func_path)
     return func(locals_=locals_) if func else None
 
 
-def import_callable(name):
+def _import_callable(name):
     result = None
     if name:
         logging.info("Importing hook '%s'", name)
@@ -41,7 +41,14 @@ def import_callable(name):
 
 
 def handler_wrapper(fn):
-    available_extras = discover_extras()
+    ### 1st hook call
+    _maybe_call_hook(ENVVAR_NAMES['pre_warmup'], locals())
+
+    available_extras = discover_extras(True)
+    print('Available extras:', list(available_extras.keys()), file=sys.stderr)
+
+    ### 2nd hook call
+    _maybe_call_hook(ENVVAR_NAMES['pre_handler_definition'], locals())
 
     @functools.wraps(fn)
     @maybe_apply_sentry(available_extras)
@@ -57,7 +64,7 @@ def handler_wrapper(fn):
                     wdb.set_trace()  # Tip: you may want to step into fn() near line 70 ;)
 
             ### 4th hook call
-            maybe_call_hook(ENVVAR_NAMES['pre_handler_call'], locals())
+            _maybe_call_hook(ENVVAR_NAMES['pre_handler_call'], locals())
 
             try:
                 request_id = context.aws_request_id
@@ -72,13 +79,17 @@ def handler_wrapper(fn):
                 available_extras['sentry'].captureException()
 
             ### Err hook call
-            maybe_call_hook(ENVVAR_NAMES['error_handler_call'], locals())
+            _maybe_call_hook(ENVVAR_NAMES['error_handler_call'], locals())
             raise
         finally:
             logger.info('END: Handle request ID: %s', request_id)
             ### 5th hook call
-            maybe_call_hook(ENVVAR_NAMES['post_handler_call'], locals())
+            _maybe_call_hook(ENVVAR_NAMES['post_handler_call'], locals())
 
             if 'wdb' in available_extras:
                 available_extras['wdb']['stop_trace']()
+
+    ### 3rd hook call
+    _maybe_call_hook(ENVVAR_NAMES['post_handler_definition'], locals())
+
     return _handler

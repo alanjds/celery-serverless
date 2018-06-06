@@ -9,7 +9,7 @@ import sys
 import json
 import logging
 
-from celery_serverless.handler_utils import maybe_call_hook, import_callable, handler_wrapper, ENVVAR_NAMES
+from celery_serverless.handler_utils import handler_wrapper
 
 logger = logging.getLogger(__name__)
 logger.propagate = True
@@ -17,20 +17,8 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
     logger.setLevel(os.environ.get('CELERY_SERVERLESS_LOGLEVEL'))
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
-
-### 1st hook call
-maybe_call_hook(ENVVAR_NAMES['pre_warmup'], locals())
-
-# The environment could have changed. Now we can discover the extras.
-from celery_serverless.extras import discover_extras
-available_extras = discover_extras(apply_s3conf=True)
-print('Available extras:', list(available_extras.keys()), file=sys.stderr)
-
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
-
-### 2nd hook call
-maybe_call_hook(ENVVAR_NAMES['pre_handler_definition'], locals())
 
 
 @handler_wrapper
@@ -66,7 +54,3 @@ def worker(event, context):
         "message": "Celery worker worked, lived, and died.",
     }
     return {"statusCode": 200, "body": json.dumps(body)}
-
-
-### 3rd hook call
-maybe_call_hook(ENVVAR_NAMES['post_handler_definition'], locals())
