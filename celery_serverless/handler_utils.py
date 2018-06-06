@@ -1,4 +1,5 @@
 import os
+import sys
 import functools
 import importlib
 import logging
@@ -40,15 +41,45 @@ def _import_callable(name):
     return result if callable(result) else None
 
 
-def handler_wrapper(fn):
-    ### 1st hook call
-    _maybe_call_hook(ENVVAR_NAMES['pre_warmup'], locals())
+_called_hooks = set()
+def _had_already_ran(hookname) -> bool:
+    """
+    Returns False if is the 1st run with  this 'hookname'. True otherwise.
+    """
+    if hookname in _called_hooks:
+        return True
+    else:
+        _called_hooks.add(hookname)
+        return False
 
-    available_extras = discover_extras(True)
+
+def _warmup_hooks(locals_={}):
+    if _had_already_ran('warmup'):
+        return
+
+    ### 1st hook call
+    _maybe_call_hook(ENVVAR_NAMES['pre_warmup'], locals_)
+
+    available_extras = discover_extras(apply_s3conf=True)
     print('Available extras:', list(available_extras.keys()), file=sys.stderr)
+    locals_['available_extras'] = available_extras
 
     ### 2nd hook call
-    _maybe_call_hook(ENVVAR_NAMES['pre_handler_definition'], locals())
+    _maybe_call_hook(ENVVAR_NAMES['pre_handler_definition'], locals_)
+    return locals_
+
+
+def _post_handler_definition_hook(locals_={}):
+    if _had_already_ran('post_handler_definition'):
+        return
+
+    ### 3rd hook call
+    _maybe_call_hook(ENVVAR_NAMES['post_handler_definition'], locals_)
+
+
+def handler_wrapper(fn):
+    ### 1st and 2nd hook calls
+    available_extras = _warmup_hooks(locals_=locals())['available_extras']
 
     @functools.wraps(fn)
     @maybe_apply_sentry(available_extras)
@@ -90,6 +121,6 @@ def handler_wrapper(fn):
                 available_extras['wdb']['stop_trace']()
 
     ### 3rd hook call
-    _maybe_call_hook(ENVVAR_NAMES['post_handler_definition'], locals())
+    _post_handler_definition_hook(locals_=locals())
 
     return _handler

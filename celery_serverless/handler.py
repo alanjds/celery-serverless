@@ -5,7 +5,6 @@ except ImportError:
     pass
 
 import os
-import sys
 import json
 import logging
 
