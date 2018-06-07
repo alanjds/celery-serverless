@@ -55,7 +55,7 @@ def worker(event, context):
     }
     return {"statusCode": 200, "body": json.dumps(body)}
 
-@handler_wrapper(available_extras)
+@handler_wrapper
 def watchdog(event, context):
     watchdog_module.monitor()
 
