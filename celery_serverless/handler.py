@@ -16,8 +16,8 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
     logger.setLevel(os.environ.get('CELERY_SERVERLESS_LOGLEVEL'))
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
-from celery_serverless.worker_management import spawn_worker, attach_hooks
 from celery_serverless.watchdog import Watchdog
+from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
 

@@ -48,4 +48,4 @@ class Watchdog(object):
             # 5) Start "Not Served" number of workers.
             self.trigger_workers(self.workers_not_served)
 
-    raise NotImplementedError()
+        raise NotImplementedError()
