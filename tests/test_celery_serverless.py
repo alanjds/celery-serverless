@@ -21,3 +21,8 @@ def test_command_line_interface():
     # assert help_result.exit_code == 0
     # assert '--help  Show this message and exit.' in help_result.output
 
+
+def test_handler_minimal_call():
+    from celery_serverless import handler_worker
+    response = handler_worker(None, None)
+    assert response
