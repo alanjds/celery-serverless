@@ -14,6 +14,10 @@ logger.setLevel('DEBUG')
 
 class Watchdog(object):
     def __init__(self):
+        ## TODO: Use a networked distributed lock to disallow many Watchdogs 
+        # to run at the same time
+        raise NotImplementedError()
+
         # 0) Clear counters
         self.workers_started = 0
         self.workers_fulfilled = 0
