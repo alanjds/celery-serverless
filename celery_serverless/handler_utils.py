@@ -55,7 +55,7 @@ def _had_already_ran(hookname) -> bool:
 
 def _warmup_hooks(locals_={}):
     if _had_already_ran('warmup'):
-        return
+        return locals_
 
     ### 1st hook call
     _maybe_call_hook(ENVVAR_NAMES['pre_warmup'], locals_)
@@ -71,7 +71,7 @@ def _warmup_hooks(locals_={}):
 
 def _post_handler_definition_hook(locals_={}):
     if _had_already_ran('post_handler_definition'):
-        return
+        return locals_
 
     ### 3rd hook call
     _maybe_call_hook(ENVVAR_NAMES['post_handler_definition'], locals_)
