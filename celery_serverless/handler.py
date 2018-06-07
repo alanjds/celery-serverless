@@ -19,7 +19,7 @@ print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 
 ### 1st hook call
-maybe_call_hook(ENVVAR_NAMES['pre_warmup_envvar'], locals())
+maybe_call_hook(ENVVAR_NAMES['pre_warmup'], locals())
 
 # Get and activate some extras
 from celery_serverless.extras import discover_extras
@@ -82,4 +82,4 @@ def watchdog(event, context):
 
 
 ### 3rd hook call
-maybe_call_hook(ENVVARS['post_handler_definition'], locals())
+maybe_call_hook(ENVVAR_NAMES['post_handler_definition'], locals())
