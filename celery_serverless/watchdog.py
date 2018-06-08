@@ -2,21 +2,22 @@
 import os
 import operator
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import backoff
 
-from celery_serverless.invoker import invoke
+from celery_serverless.invoker import invoke as invoke_worker
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
 
 class Watchdog(object):
-    def __init__(self):
-        ## TODO: Use a networked distributed lock to disallow many Watchdogs 
-        # to run at the same time
-        raise NotImplementedError()
+    def __init__(self, cache=None, name='', lock=None):
+        self._cache = cache or StrippedLocMemCache()
+        self._name = name or 'celery_serverless'
+        self._lock = lock or threading.Lock()
 
         # 0) Clear counters
         self.workers_started = 0
@@ -32,8 +33,8 @@ class Watchdog(object):
         raise NotImplementedError()
 
     def trigger_workers(self, how_much:int):
-        # Hack to call parameterless 'invoke' func -> lambda x: invoke
-        return len([i for i in self.executor.map(lambda x: invoke, (None)*how_much)])
+        # Hack to call parameterless 'invoke_worker' func -> lambda x: invoke_worker
+        return len([i for i in self.executor.map(lambda x: invoke_worker, (None)*how_much)])
 
     @backoff.on_predicate(backoff.fibo)  # Will backoff until return True-ly val
     def _wait_starts(self, starts:int):
@@ -53,3 +54,21 @@ class Watchdog(object):
             self.trigger_workers(self.workers_not_served)
 
         return self.workers_started  # How many had to be started to fulfill the queue?
+
+
+class StrippedLocMemCache(object):
+    # Stripped from Django's LocMemCache.
+    # See: https://github.com/django/django/blob/master/django/core/cache/backends/locmem.py
+    def __init__(self):
+        self._cache = {}
+
+    def get(self, key, default=None):
+        return self._cache.get(key, default)
+
+    def set(self, key, value):
+        self._cache[key] = value
+
+    def incr(self, key, delta=1):
+        self._cache.setdefault(key, 0)
+        self._cache[key] += delta
+        return self.get(key)
