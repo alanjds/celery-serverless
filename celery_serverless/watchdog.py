@@ -25,6 +25,22 @@ class Watchdog(object):
         self.executor = ThreadPoolExecutor()
 
     @property
+    def workers_started(self):
+        return self._cache.get('%s:%s' % (self._name, 'workers_started'))
+
+    @workers_started.setter
+    def workers_started(self, value):
+        self._cache.set('%s:%s' % (self._name, 'workers_started'))
+
+    @property
+    def workers_fulfilled(self):
+        return self._cache.get('%s:%s' % (self._name, 'workers_fulfilled'))
+
+    @workers_fulfilled.setter
+    def workers_fulfilled(self, value):
+        self._cache.set('%s:%s' % (self._name, 'workers_fulfilled'))
+
+    @property
     def workers_not_served(self):
         return self.workers_started - self.workers_fulfilled
 
