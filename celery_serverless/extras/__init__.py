@@ -29,6 +29,10 @@ def discover_logdrain():
     LOGDRAIN_URL = os.environ.get('LOGDRAIN_URL')
     if LOGDRAIN_URL and not os.environ.get('CELERY_SERVERLESS_NO_LOGDRAIN'):
         logger.info('Activating Logdrain extra support')
+        try:
+            import raven
+        except ImportError:
+            raise RuntimeError("Could not import 'raven'. Have you installed the the ['logdrain'] extra?")
         from celery_serverless.extras.logdrain import init_logdrain
         return {'logdrain': init_logdrain()}
     return {}
@@ -52,13 +56,57 @@ def discover_wdb():
     return {}
 
 
+def discover_s3conf():
+    ## S3Conf extras:
+    S3CONF = os.environ.get('S3CONF')
+    if S3CONF and not os.environ.get('CELERY_SERVERLESS_NO_S3CONF'):
+        logger.info('Activating S3CONF extra support')
+        try:
+            import s3conf
+        except ImportError:
+            raise RuntimeError("Could not import 's3conf'. Have you installed the the ['s3conf'] extra?")
+        from celery_serverless.extras.s3conf import init_s3conf
+        return {
+            's3conf': {
+                'apply':init_s3conf,
+            }
+        }
+    return {}
+
+    
 ## Discoverer
 
-DISCOVER_FUNCTIONS = [discover_sentry, discover_logdrain, discover_wdb]
+## Discoverer
 
-def discover_extras():
+DISCOVER_FUNCTIONS = [
+    discover_s3conf,  # Will be handled directly, as changes other extras availability
+    discover_sentry,
+    discover_logdrain,
+    discover_wdb,
+]
+
+def discover_extras(apply_s3conf=False):
+    # S3CONF is special. It is slower and change the others. Save it for later.
+    if 's3conf' in available_extras:
+        s3conf_extra = {'s3conf': available_extras['s3conf']}
+    else:
+        s3conf_extra = {}
+
+    # Get and activate some extras, starting by environment-related ones
+    if apply_s3conf:
+        if not s3conf_extra:
+            s3conf_extra = discover_s3conf()   # {} or {'s3conf': ...}
+
+        if s3conf_extra.get('s3conf', {}).get('apply'):  # Available and not applyed
+            # Should be the 1st one called because can set the environment
+            # Then the next ones can be discovered based on s3conf results
+            logger.debug('Applying S3CONF serverless environment extra')
+            s3conf_extra = {'s3conf': s3conf_extra['s3conf'].pop('apply')()}
+
     available_extras.clear()
     for func in DISCOVER_FUNCTIONS:
+        if func is discover_s3conf and s3conf_extra:  # Reuse slow task if possible
+            func = lambda: s3conf_extra
         available_extras.update(func())
     return available_extras
 
