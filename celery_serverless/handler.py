@@ -16,6 +16,7 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
     logger.setLevel(os.environ.get('CELERY_SERVERLESS_LOGLEVEL'))
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
+from redlock import RedLock
 from celery_serverless.watchdog import Watchdog
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
@@ -57,7 +58,20 @@ def worker(event, context):
 
 @handler_wrapper
 def watchdog(event, context):
-    Watchdog().monitor()
+    lock_name = os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless')
+    lock_url = os.environ.get('CELERY_SERVERLESS_LOCK_URL')
+    assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
+
+    if lock_url == 'disabled':
+        lock = None
+        cache = None
+    elif lock_url.startswith(('redis://', 'rediss://')):
+        lock = RedLock(lock_name, connection_details=[{'url': node} for node in lock_url.split(',')])
+        cache = lock.redis_nodes[0]  # Using the Lock redis as values cache
+    else:
+        raise RuntimeWarning("This URL is not supported. Only 'redis[s]://...' is supported for now")
+
+    Watchdog(cache=cache, name=lock_name, lock=lock).monitor()
 
     logger.debug('Cleaning up before exit')
     body = {
