@@ -30,7 +30,7 @@ class Watchdog(object):
 
     @workers_started.setter
     def workers_started(self, value):
-        self._cache.set('%s:%s' % (self._name, 'workers_started'))
+        self._cache.set('%s:%s' % (self._name, 'workers_started'), value)
 
     @property
     def workers_fulfilled(self):
@@ -38,7 +38,7 @@ class Watchdog(object):
 
     @workers_fulfilled.setter
     def workers_fulfilled(self, value):
-        self._cache.set('%s:%s' % (self._name, 'workers_fulfilled'))
+        self._cache.set('%s:%s' % (self._name, 'workers_fulfilled'), value)
 
     @property
     def workers_not_served(self):

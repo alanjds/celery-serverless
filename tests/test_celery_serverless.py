@@ -31,7 +31,8 @@ def test_worker_handler_minimal_call():
 
 def test_watchdog_handler_minimal_call():
     from celery_serverless import handler_watchdog
-    response = handler_watchdog(None, None)
+    with env.set_env(CELERY_SERVERLESS_LOCK_URL='disabled'):
+        response = handler_watchdog(None, None)
     assert response
 
 
