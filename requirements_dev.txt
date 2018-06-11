@@ -9,6 +9,7 @@ Sphinx==1.7.1
 twine
 raven==6.9.0
 s3conf==0.7.0
+wdb==3.2.3
 
 pytest==3.5.0
 pytest-runner==4.2
