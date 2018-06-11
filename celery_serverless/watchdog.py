@@ -14,10 +14,11 @@ logger.setLevel('DEBUG')
 
 
 class Watchdog(object):
-    def __init__(self, cache=None, name='', lock=None):
+    def __init__(self, cache=None, name='', lock=None, watched=None):
         self._cache = cache or StrippedLocMemCache()
         self._name = name or 'celery_serverless'
         self._lock = lock or threading.Lock()
+        self._watched = watched
 
         # 0) Clear counters
         self.workers_started = 0
@@ -46,7 +47,10 @@ class Watchdog(object):
 
     @property
     def queue_length(self):
-        raise NotImplementedError()
+        if self._watched is None:
+            logger.warning('Watchdog is watching None as queue. Fix it!')
+            return 0
+        return len(self._watched)
 
     def trigger_workers(self, how_much:int):
         # Hack to call parameterless 'invoke_worker' func -> lambda x: invoke_worker

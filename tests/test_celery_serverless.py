@@ -31,15 +31,17 @@ def test_worker_handler_minimal_call():
 
 def test_watchdog_handler_minimal_call():
     from celery_serverless import handler_watchdog
-    with env.set_env(CELERY_SERVERLESS_LOCK_URL='disabled'):
+    with env.set_env(CELERY_SERVERLESS_LOCK_URL='disabled', CELERY_SERVERLESS_QUEUE_URL='disabled'):
         response = handler_watchdog(None, None)
     assert response
 
 
-def test_watchdog_needs_envvar():
+_needed_parameters = ['CELERY_SERVERLESS_LOCK_URL', 'CELERY_SERVERLESS_QUEUE_URL']
+@pytest.mark.parametrize('envname', _needed_parameters)
+def test_watchdog_needs_envvar(envname):
     from celery_serverless import handler_watchdog
     try:
-        with env.unset_env(['CELERY_SERVERLESS_LOCK_URL']):
+        with env.unset_env([envname]):
             handler_watchdog(None, None)
     except AssertionError as err:
         assert 'envvar should be set' in str(err)

@@ -63,6 +63,9 @@ def watchdog(event, context):
     lock_url = os.environ.get('CELERY_SERVERLESS_LOCK_URL')
     assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
 
+    queue_url = os.environ.get('CELERY_SERVERLESS_QUEUE_URL')
+    assert queue_url, 'The CELERY_SERVERLESS_QUEUE_URL envvar should be set. Even to "disabled" to disable it.'
+
     if lock_url == 'disabled':
         lock = None
         cache = None
@@ -72,7 +75,14 @@ def watchdog(event, context):
     else:
         raise RuntimeWarning("This URL is not supported. Only 'redis[s]://...' is supported for now")
 
-    Watchdog(cache=cache, name=lock_name, lock=lock).monitor()
+    if queue_url == 'disabled':
+        watched = None
+    elif queue_url.startswith('amqp://'):
+        raise NotImplementedError('Should create an object to be watched')
+    else:
+        raise RuntimeWarning("This URL is not supported. Only 'amqp://...' is supported for now")
+
+    Watchdog(cache=cache, name=lock_name, lock=lock, watched=watched).monitor()
 
     logger.debug('Cleaning up before exit')
     body = {
