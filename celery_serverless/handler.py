@@ -56,6 +56,7 @@ def worker(event, context):
     }
     return {"statusCode": 200, "body": json.dumps(body)}
 
+
 @handler_wrapper
 def watchdog(event, context):
     lock_name = os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless')

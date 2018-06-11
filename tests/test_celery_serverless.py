@@ -4,6 +4,7 @@
 """Tests for `celery_worker_serverless` package."""
 
 import pytest
+from pytest_shutil import env
 
 from click.testing import CliRunner
 
@@ -32,3 +33,14 @@ def test_watchdog_handler_minimal_call():
     from celery_serverless import handler_watchdog
     response = handler_watchdog(None, None)
     assert response
+
+
+def test_watchdog_needs_envvar():
+    from celery_serverless import handler_watchdog
+    try:
+        with env.unset_env(['CELERY_SERVERLESS_LOCK_URL']):
+            handler_watchdog(None, None)
+    except AssertionError as err:
+        assert 'envvar should be set' in str(err)
+    else:
+        raise RuntimeError('Had not raised an AssertionError')
