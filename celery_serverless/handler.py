@@ -89,4 +89,3 @@ def watchdog(event, context):
         "message": "Watchdog woke, worked, and rested.",
     }
     return {"statusCode": 200, "body": json.dumps(body)}
-
