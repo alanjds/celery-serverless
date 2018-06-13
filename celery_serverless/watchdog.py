@@ -4,6 +4,7 @@ import operator
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from itertools import count
 
 import backoff
 from kombu import Connection
@@ -88,13 +89,20 @@ class Watchdog(object):
         return not_served
 
     def monitor(self):
-        while self.queue_length:  # 1) See queue length N
-            started = self.trigger_workers(self.get_queue_length())  # 2) Start N workers
-            self._wait_starts(started)  # 3) Watch for N starts
-            self._wait_fulfillment()  # 4) Wait then collect "Not Served" number
+        for loops in count(1):  # while True
+            logger.debug('Monitor loop started! [%s]', loops)
+
+            started = self.trigger_workers(self.get_queue_length())  # 1) See queue length N; 2) Start N workers
+            if not started:
+                break
+
+            self._wait_start_notifications(started)  # 3) Watch for N starts
+            unserved = self._wait_fulfillment()  # 4) Wait then collect "Not Served" number
 
             # 5) Start "Not Served" number of workers.
-            self.trigger_workers(self.workers_not_served)
+            if unserved:
+                logger.info('Starting %s workers (again)', unserved)
+                self.trigger_workers(unserved)
 
         return self.workers_started  # How many had to be started to fulfill the queue?
 
