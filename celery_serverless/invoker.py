@@ -32,18 +32,21 @@ except ImportError:  # Boto3 is an optional extra on setup.py
 from .cli_utils import run
 from .utils import run_aio_on_thread
 
-CELERY_HANDLER_PATH = 'celery_serverless.handler_worker'
+CELERY_HANDLER_PATHS = {
+    'worker': 'celery_serverless.handler_worker',
+    'monitor': 'celery_serverless.handler_watchdog',
+}
 
 
-def _get_serverless_name(config):
+def _get_serverless_name(config, target):
     for name, options in config['functions'].items():
-        if options.get('handler') == CELERY_HANDLER_PATH:
+        if options.get('handler') == CELERY_HANDLER_PATHS[target]:
             return name
 
     raise RuntimeError((
         "Handler '%s' not found on serverless.yml.\n"
         "Please fix it or run 'celery serverless init' to recreate one"
-    ) % CELERY_HANDLER_PATH)
+    ) % CELERY_HANDLER_PATHS[target])
 
 
 @functools.lru_cache(8)
@@ -61,7 +64,8 @@ def _get_awslambda_arn(function_name):
 
 
 class Invoker(object):
-    def __init__(self, config=None):
+    def __init__(self, target='worker', config=None):
+        self.target = target
         self.config = config or get_config()
 
     def invoke_main(self, strategy='', stage=''):
@@ -105,7 +109,7 @@ class Invoker(object):
         return 'serverless'
 
     def _invoke_serverless(self, stage='', local=False):
-        name = _get_serverless_name(self.config)
+        name = _get_serverless_name(self.config, self.target)
         command = 'serverless invoke'
         if local:
             command += ' local'
@@ -140,7 +144,7 @@ class Invoker(object):
     def _invoke_boto3(self, stage='', sync=False, executor='asyncio'):
         stage = stage or self._get_stage()
         function_name = '%s-%s-%s' % (self.config['service'], stage,
-                                      _get_serverless_name(self.config))
+                                      _get_serverless_name(self.config, self.target))
         lambda_arn = _get_awslambda_arn(function_name)
         assert lambda_arn, 'An exeception should had raised on _get_awslambda_arn call.'
         logger.debug("Invoking via 'boto3' %s %s", 'sync' if sync else 'async', executor)
@@ -201,5 +205,5 @@ class Invoker(object):
         return output, future
 
 
-def invoke(config=None, *args, **kwargs):
-    return Invoker(config=config).invoke_main(*args, **kwargs)
+def invoke(target='worker', config=None, *args, **kwargs):
+    return Invoker(target=target, config=config).invoke_main(*args, **kwargs)
