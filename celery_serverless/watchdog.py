@@ -16,7 +16,6 @@ from celery_serverless.invoker import invoke as invoke_worker
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
-KOMBU_HEARTBEAT = 2
 
 
 class Watchdog(object):
@@ -105,9 +104,6 @@ class Watchdog(object):
                 logger.info('Starting %s workers (again)', unserved)
                 self.trigger_workers(unserved)
 
-            if isinstance(self._watched, KombuQueueLengther):   # len(_watched) will not change until next heartbeat
-                time.sleep(KOMBU_HEARTBEAT * 2)
-
         return self.workers_started  # How many had to be started to fulfill the queue?
 
 
@@ -150,9 +146,20 @@ pyamqp.Channel._size = _AMQPChannel_size
 
 
 class KombuQueueLengther(object):
+    KOMBU_HEARTBEAT = 2
+
     def __init__(self, url, queue):
-        self.connection = Connection(url, heartbeat=KOMBU_HEARTBEAT)
+        self.connection = Connection(url, heartbeat=self.KOMBU_HEARTBEAT)
         self.queue = queue
+        self._maybe_dirty = False
 
     def __len__(self):
-        return self.connection.channel()._size(self.queue)
+        if self._maybe_dirty:
+            time.sleep(self.KOMBU_HEARTBEAT * 1.5)
+        result = self.connection.channel()._size(self.queue)
+
+        # Kombu queue length will not change until next heartbeat.
+        # Would be better to use some token-bucket timeout,
+        # but some `time.delay()` will do for now.
+        self._maybe_dirty = True
+        return result
