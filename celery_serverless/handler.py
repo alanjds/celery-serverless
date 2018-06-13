@@ -17,7 +17,7 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 from redlock import RedLock
-from celery_serverless.watchdog import Watchdog
+from celery_serverless.watchdog import Watchdog, KombuQueueLengther
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
@@ -59,7 +59,7 @@ def worker(event, context):
 
 @handler_wrapper
 def watchdog(event, context):
-    lock_name = os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless')
+    lock_name = os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless:watchdog')
     lock_url = os.environ.get('CELERY_SERVERLESS_LOCK_URL')
     assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
 
@@ -77,10 +77,8 @@ def watchdog(event, context):
 
     if queue_url == 'disabled':
         watched = None
-    elif queue_url.startswith('amqp://'):
-        raise NotImplementedError('Should create an object to be watched')
     else:
-        raise RuntimeWarning("This URL is not supported. Only 'amqp://...' is supported for now")
+        watched = KombuQueueLengther(queue_url, 'celery')   # TODO: Allow queue name to be chosen
 
     Watchdog(cache=cache, name=lock_name, lock=lock, watched=watched).monitor()
 

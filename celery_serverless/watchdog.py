@@ -6,17 +6,21 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import backoff
+from kombu import Connection
+from kombu.transport import pyamqp
 
 from celery_serverless.invoker import invoke as invoke_worker
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
+KOMBU_HEARTBEAT = 2
+
 
 class Watchdog(object):
     def __init__(self, cache=None, name='', lock=None, watched=None):
         self._cache = cache or StrippedLocMemCache()
-        self._name = name or 'celery_serverless'
+        self._name = name or 'celery_serverless:watchdog'
         self._lock = lock or threading.Lock()
         self._watched = watched
 
@@ -92,3 +96,32 @@ class StrippedLocMemCache(object):
         self._cache.setdefault(key, 0)
         self._cache[key] += delta
         return self.get(key)
+
+
+# Queue length with ideas from ryanhiebert/hirefire
+# See: https://github.com/ryanhiebert/hirefire/blob/67d57c8/hirefire/procs/celery.py#L239
+def _AMQPChannel_size(self, queue):
+        try:
+            from librabbitmq import ChannelError
+        except ImportError:
+            from amqp.exceptions import ChannelError
+
+        try:
+            queue = self.queue_declare(queue, passive=True)
+        except ChannelError:
+            # The requested queue has not been created yet
+            count = 0
+        else:
+            count = queue.message_count
+
+        return count
+pyamqp.Channel._size = _AMQPChannel_size
+
+
+class KombuQueueLengther(object):
+    def __init__(self, url, queue):
+        self.connection = Connection(url, heartbeat=KOMBU_HEARTBEAT)
+        self.queue = queue
+
+    def __len__(self):
+        return self.connection.channel()._size(self.queue)
