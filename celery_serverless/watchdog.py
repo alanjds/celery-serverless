@@ -29,9 +29,13 @@ class Watchdog(object):
         self.workers_fulfilled = 0
         self.executor = ThreadPoolExecutor()
 
+    #
+    # Number we need. Calculated from the _cache
+    #
+
     @property
     def workers_started(self):
-        return self._cache.get('%s:%s' % (self._name, 'workers_started'))
+        return int(self._cache.get('%s:%s' % (self._name, 'workers_started')) or 0)
 
     @workers_started.setter
     def workers_started(self, value):
@@ -39,38 +43,53 @@ class Watchdog(object):
 
     @property
     def workers_fulfilled(self):
-        return self._cache.get('%s:%s' % (self._name, 'workers_fulfilled'))
+        return int(self._cache.get('%s:%s' % (self._name, 'workers_fulfilled')) or 0)
 
     @workers_fulfilled.setter
     def workers_fulfilled(self, value):
         self._cache.set('%s:%s' % (self._name, 'workers_fulfilled'), value)
 
-    @property
-    def workers_not_served(self):
-        return self.workers_started - self.workers_fulfilled
+    #
+    # Numbers calculated from the ones we do have:
+    #
 
     @property
-    def queue_length(self):
+    def workers_not_served(self):
+        unfulfilled = self.workers_started - self.workers_fulfilled
+        return unfulfilled if unfulfilled > 0 else 0
+
+    def get_queue_length(self):
         if self._watched is None:
             logger.warning('Watchdog is watching None as queue. Fix it!')
             return 0
-        return len(self._watched)
+        len_ = len(self._watched)
+        logger.debug('_watched reported %s jobs awaiting', len_)
+        return len_
+
+    #
+    # Actions:
+    #
 
     def trigger_workers(self, how_much:int):
+        logger.info('Starting %s workers', how_much)
         # Hack to call parameterless 'invoke_worker' func -> lambda x: invoke_worker
         return len([i for i in self.executor.map(lambda x: invoke_worker, (None)*how_much)])
 
-    @backoff.on_predicate(backoff.fibo)  # Will backoff until return True-ly val
-    def _wait_starts(self, starts:int):
-        return (self.workers_started >= starts)
+    @backoff.on_predicate(backoff.fibo, max_value=10)  # Will backoff until return True-ly val
+    def _wait_start_notifications(self, starts:int):
+        started = self.workers_started
+        logger.debug('Started so far: %s', started)
+        return (started >= starts)
 
-    @backoff.on_predicate(backoff.fibo, predicate=operator.truth, max_time=20)
-    def _wait_fulfillment(self):    # Stop backoff when 0 returned or max_time
-        return self.workers_not_served
+    @backoff.on_predicate(backoff.fibo, predicate=operator.truth, max_value=9, max_time=30)
+    def _wait_fulfillment(self):    # Stop backoff when 0 not_served or on max_time reached
+        not_served = self.workers_not_served
+        logger.info('Workers still unserved: %s', not_served)
+        return not_served
 
     def monitor(self):
         while self.queue_length:  # 1) See queue length N
-            started = self.trigger_workers(self.queue_length)  # 2) Start N workers
+            started = self.trigger_workers(self.get_queue_length())  # 2) Start N workers
             self._wait_starts(started)  # 3) Watch for N starts
             self._wait_fulfillment()  # 4) Wait then collect "Not Served" number
 
