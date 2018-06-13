@@ -73,7 +73,7 @@ class Watchdog(object):
     def trigger_workers(self, how_much:int):
         logger.info('Starting %s workers', how_much)
         # Hack to call parameterless 'invoke_worker' func -> lambda x: invoke_worker
-        return len([i for i in self.executor.map(lambda x: invoke_worker, (None)*how_much)])
+        return len([i for i in self.executor.map(lambda x: invoke_worker(), range(how_much))])
 
     @backoff.on_predicate(backoff.fibo, max_value=10)  # Will backoff until return True-ly val
     def _wait_start_notifications(self, starts:int):
