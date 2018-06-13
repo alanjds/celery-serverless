@@ -1,5 +1,6 @@
 # coding: utf-8
 import os
+import time
 import operator
 import logging
 import threading
@@ -103,6 +104,9 @@ class Watchdog(object):
             if unserved:
                 logger.info('Starting %s workers (again)', unserved)
                 self.trigger_workers(unserved)
+
+            if isinstance(self._watched, KombuQueueLengther):   # len(_watched) will not change until next heartbeat
+                time.sleep(KOMBU_HEARTBEAT * 2)
 
         return self.workers_started  # How many had to be started to fulfill the queue?
 
