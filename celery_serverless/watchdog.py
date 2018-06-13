@@ -4,6 +4,7 @@ import time
 import operator
 import logging
 import threading
+from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 from itertools import count
 
@@ -11,11 +12,12 @@ import backoff
 from kombu import Connection
 from kombu.transport import pyamqp
 
-from celery_serverless.invoker import invoke as invoke_worker
+from celery_serverless.invoker import invoke
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
+invoke_worker = partial(invoke, target='worker')
 
 
 class Watchdog(object):
