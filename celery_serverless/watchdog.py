@@ -104,13 +104,8 @@ class Watchdog(object):
 
             # 4) Wait then collect "Not Served" number
             unserved = self._wait_fulfillment()
-
-            # 5) Start "Not Served" number of workers.
             if unserved:
-                # Lets not restart more than the queue length
-                restarted = min(unserved, self.get_queue_length())
-                logger.info('Starting %s workers (again)', restarted)
-                self.trigger_workers(restarted)
+                logger.warning('Unserved %s workers', unserved)
 
         return self.workers_started  # How many had to be started to fulfill the queue?
 
