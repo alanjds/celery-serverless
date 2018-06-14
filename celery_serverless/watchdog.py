@@ -94,12 +94,16 @@ class Watchdog(object):
         for loops in count(1):  # while True
             logger.debug('Monitor loop started! [%s]', loops)
 
-            started = self.trigger_workers(self.get_queue_length())  # 1) See queue length N; 2) Start N workers
+            # 1) See queue length N; 2) Start N workers
+            started = self.trigger_workers(self.get_queue_length())
             if not started:
                 break
 
-            self._wait_start_notifications(started)  # 3) Watch for N starts
-            unserved = self._wait_fulfillment()  # 4) Wait then collect "Not Served" number
+            # 3) Watch for N starts
+            self._wait_start_notifications(started)
+
+            # 4) Wait then collect "Not Served" number
+            unserved = self._wait_fulfillment()
 
             # 5) Start "Not Served" number of workers.
             if unserved:
