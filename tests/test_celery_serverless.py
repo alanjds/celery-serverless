@@ -80,12 +80,11 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
 
         # Worker gets a job to do, then notify the cache
         time.sleep(2)
+        conn.rpop(queue_name)  # Gotten jobs drops from the queue.
         conn.incr('celery_serverless:watchdog:workers_fulfilled')
 
-        # The job got done. It is poped from the queue
-        time.sleep(4)
-        conn.rpop(queue_name)
-
+        # Note that we do not care where it finished. Just that started
+        # AND got dropped from the queue
         logger.warning('Simulating an Worker invocation: END')
 
     _simulate_worker_invocation()   # Just be sure that it works.
