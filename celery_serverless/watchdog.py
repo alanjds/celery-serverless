@@ -30,40 +30,45 @@ class Watchdog(object):
         self._name = name or DEFAULT_BASENAME
         self._lock = lock or threading.Lock()
         self._watched = watched
+        self.pool_size = 200
 
         # 0) Clear counters
         self.workers_started = 0
         self.workers_fulfilled = 0
-        self.executor = ThreadPoolExecutor()
+        self._pubsub = self._intercom.pubsub() if isinstance(self._intercom, StrictRedis) else None
+        if self._pubsub:
+            self._init_pubsub()
 
-    #
-    # Number we need. Calculated from the _cache
-    #
+    def _init_pubsub(self):
+        """
+        Creates a bunch of callbacks for events sent by our workers.
+        """
+        channel_join_key = get_workers_all_key(prefix=self._name) + '[join]'
+        def _handle_join_event(message):
+            logging.debug('[event:join] Worker joined')
+            self.workers_started += 1
 
-    @property
-    def workers_started(self):
-        return int(self._cache.get('%s:%s' % (self._name, 'workers_started')) or 0)
+        channel_working_key = get_workers_all_key(prefix=self._name) + '[working]'
+        def _handle_working_event(message):
+            logging.debug('[event:working] Worker got a job')
+            self.workers_fulfilled += 1
 
-    @workers_started.setter
-    def workers_started(self, value):
-        self._cache.set('%s:%s' % (self._name, 'workers_started'), value)
+        channel_leave_key = get_workers_all_key(prefix=self._name) + '[leave]'
+        def _handle_leave_event(message):
+            logging.debug('[event:leave] Worker rested')
 
-    @property
-    def workers_fulfilled(self):
-        return int(self._cache.get('%s:%s' % (self._name, 'workers_fulfilled')) or 0)
+        self._subscription_hooks = {    # Prevents GC. Should hold the handle.
+            channel_join_key: _handle_join_event,
+            channel_working_key: _handle_working_event,
+            channel_leave_key: _handle_leave_event,
+        }
+        self._pubsub.subscribe(**self._subscription_hooks)
+        self._pubsub.run_in_thread(daemon=True)
 
-    @workers_fulfilled.setter
-    def workers_fulfilled(self, value):
-        self._cache.set('%s:%s' % (self._name, 'workers_fulfilled'), value)
-
-    #
-    # Numbers calculated from the ones we do have:
-    #
-
-    @property
-    def workers_not_served(self):
-        unfulfilled = self.workers_started - self.workers_fulfilled
-        return unfulfilled if unfulfilled > 0 else 0
+    def get_workers_count(self):
+        if not isinstance(self._intercom, StrictRedis):
+            raise NotImplementedError()
+        return refresh_workers_all_key(self._intercom)[0]
 
     def get_queue_length(self):
         if self._watched is None:
@@ -79,18 +84,26 @@ class Watchdog(object):
 
     def trigger_workers(self, how_much:int):
         logger.info('Starting %s workers', how_much)
-        # Hack to call parameterless 'invoke_worker' func -> lambda x: invoke_worker
-        return len([i for i in self.executor.map(lambda x: invoke_worker(), range(how_much))])
+        self.workers_started = self.workers_fulfilled = 0
 
-    @backoff.on_predicate(backoff.fibo, max_value=10)  # Will backoff until return True-ly val
-    def _wait_start_notifications(self, starts:int):
+        triggered = []
+        for i in range(how_much):
+            triggered.append(invoke_worker())
+        return len(triggered)
+
+    # Will retry until return 0 or max_time reached
+    @backoff.on_predicate(backoff.constant, predicate=operator.truth, max_time=30)
+    def wait_start_notifications(self, starts:int):
         started = self.workers_started
-        logger.debug('Started so far: %s', started)
-        return (started >= starts)
+        not_started = starts - started
+        not_served = started - self.workers_fulfilled
+        logger.debug('Started so far: %s  [%s unserved]', started, not_served)
+        return not_started
 
+    # Will retry until return 0 or max_time reached
     @backoff.on_predicate(backoff.fibo, predicate=operator.truth, max_value=9, max_time=30)
-    def _wait_fulfillment(self):    # Stop backoff when 0 not_served or on max_time reached
-        not_served = self.workers_not_served
+    def wait_working_notifications(self, started:int):
+        not_served = started - self.workers_fulfilled
         logger.info('Workers still unserved: %s', not_served)
         return not_served
 
@@ -98,18 +111,28 @@ class Watchdog(object):
         for loops in count(1):  # while True
             logger.debug('Monitor loop started! [%s]', loops)
 
-            # 1) See queue length N; 2) Start N workers
-            started = self.trigger_workers(self.get_queue_length())
-            if not started:
-                break
+            # 1) See queue length N
+            queue_length = self.get_queue_length()
 
-            # 3) Watch for N starts
-            self._wait_start_notifications(started)
+            # 2a) Stop if empty queue and no running worker left
+            existing_workers = self.get_workers_count()
+            if not queue_length:
+                if existing_workers:
+                    logger.debug('Empty queue, but still %s workers running', existing_workers)
+                else:  # No queue and no workers: Stop monitoring
+                    logger.debug('Empty queue and no worker running. Stop monitoring')
+                    break
 
-            # 4) Wait then collect "Not Served" number
-            unserved = self._wait_fulfillment()
-            if unserved:
-                logger.warning('Unserved %s workers', unserved)
+            # 2b) Start (N-existing) workers
+            available_workers = self.pool_size - existing_workers
+            to_trigger = min(queue_length, available_workers)
+            triggered = self.trigger_workers(to_trigger)
+
+            # 3b) Watch for N starts
+            started = self.wait_start_notifications(triggered)
+
+            # 4) Watch for N working notifications
+            working = self.wait_working_notifications(started)
 
         return self.workers_started  # How many had to be started to fulfill the queue?
 
