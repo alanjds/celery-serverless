@@ -124,7 +124,7 @@ class Watchdog(object):
                     break
 
             # 2b) Start (N-existing) workers
-            available_workers = self.pool_size - existing_workers
+            available_workers = max(self.pool_size - existing_workers, 0)
             to_trigger = min(queue_length, available_workers)
             triggered = self.trigger_workers(to_trigger)
 
