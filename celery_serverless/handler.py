@@ -68,10 +68,10 @@ def watchdog(event, context):
 
     if lock_url == 'disabled':
         lock = None
-        cache = None
+        communicator = None
     elif lock_url.startswith(('redis://', 'rediss://')):
         lock = RedLock(lock_name, connection_details=[{'url': node} for node in lock_url.split(',')])
-        cache = lock.redis_nodes[0]  # Using the Lock redis as values cache
+        communicator = lock.redis_nodes[0]  # Using the Lock redis as values cache
     else:
         raise RuntimeWarning("This URL is not supported. Only 'redis[s]://...' is supported for now")
 
@@ -80,7 +80,7 @@ def watchdog(event, context):
     else:
         watched = KombuQueueLengther(queue_url, 'celery')   # TODO: Allow queue name to be chosen
 
-    Watchdog(cache=cache, name=lock_name, lock=lock, watched=watched).monitor()
+    Watchdog(communicator=communicator, name=lock_name, lock=lock, watched=watched).monitor()
 
     logger.debug('Cleaning up before exit')
     body = {

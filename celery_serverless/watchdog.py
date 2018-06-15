@@ -21,9 +21,9 @@ invoke_worker = partial(invoke, target='worker')
 
 
 class Watchdog(object):
-    def __init__(self, cache=None, name='', lock=None, watched=None):
-        self._cache = cache or StrippedLocMemCache()
-        self._name = name or 'celery_serverless:watchdog'
+    def __init__(self, communicator=None, name='', lock=None, watched=None):
+        self._intercom = communicator or StrippedLocMemCache()
+        self._name = name or DEFAULT_BASENAME
         self._lock = lock or threading.Lock()
         self._watched = watched
 
