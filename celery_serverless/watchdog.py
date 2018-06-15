@@ -7,17 +7,21 @@ import threading
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 from itertools import count
+from datetime import datetime, timezone, timedelta
 
 import backoff
+from redis import StrictRedis
 from kombu import Connection
 from kombu.transport import pyamqp
-
 from celery_serverless.invoker import invoke
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
 invoke_worker = partial(invoke, target='worker')
+
+DEFAULT_BASENAME = 'celery_serverless:watchdog'
+DEFAULT_BUCKET_EXPIRE = 6 * 60  # 6 minutes
 
 
 class Watchdog(object):
@@ -166,3 +170,55 @@ class KombuQueueLengther(object):
         # but some `time.delay()` will do for now.
         self._maybe_dirty = True
         return result
+
+
+def _cap_to_minute(now):
+    return now.replace(second=0, microsecond=0)
+
+
+def get_workers_all_key(prefix=DEFAULT_BASENAME):
+    return '%s:workers:all' % prefix
+
+
+def get_workers_bucket_key(prefix=DEFAULT_BASENAME, now=None):
+    this_minute = _cap_to_minute(now or datetime.now(timezone.utc))
+    return '%s:workers:%s' % (prefix, this_minute.isoformat())
+
+
+def inform_worker_join(redis:'StrictRedis', worker_id:str, bucket='', prefix=DEFAULT_BASENAME, now=None):
+    bucket = bucket or get_workers_bucket_key(prefix=prefix, now=now)
+    with redis.pipeline() as pipe:
+        pipe.sadd(bucket, worker_id)
+        pipe.expire(bucket, DEFAULT_BUCKET_EXPIRE)
+        pipe.publish(get_workers_all_key(prefix=prefix) + '[join]', worker_id)
+        pipe.execute()
+    return bucket
+
+
+def inform_worker_working(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAME):
+    return redis.publish(get_workers_all_key(prefix=prefix) + '[working]', worker_id)
+
+
+def inform_worker_leave(redis:'StrictRedis', worker_id:str, bucket:str):
+    with redis.pipeline() as pipe:
+        pipe.srem(bucket, worker_id)
+        pipe.publish(get_workers_all_key() + '[leave]', worker_id)
+        was_removed, _ = pipe.execute()
+    return was_removed
+
+
+def refresh_workers_all_key(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=None, minutes=5):
+    workers_all_key = get_workers_all_key(prefix=prefix)
+
+    this_minute = _cap_to_minute(now or datetime.now(timezone.utc))
+    worker_buckets = []
+    for i in range(minutes):
+        target_time = this_minute - timedelta(minutes=i)
+        worker_buckets.append(get_workers_bucket_key(prefix=prefix, now=target_time))
+
+    with redis.pipeline() as pipe:
+        pipe.sunionstore(workers_all_key, worker_buckets)
+        pipe.expire(workers_all_key, DEFAULT_BUCKET_EXPIRE)
+        workers_len, _ = pipe.execute()
+
+    return workers_len, workers_all_key, worker_buckets

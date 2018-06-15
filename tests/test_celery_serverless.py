@@ -4,15 +4,17 @@
 """Tests for `celery_worker_serverless` package."""
 
 import time
+import uuid
 import logging
 import pytest
 from pytest_shutil import env
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 from click.testing import CliRunner
 
 import celery_serverless
-from celery_serverless import cli
+from celery_serverless import cli, watchdog
 from celery_serverless import handler_worker, handler_watchdog
 
 logger = logging.getLogger(__name__)
@@ -76,18 +78,27 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
 
         # Worker takes some time to init, then notify the Cache
         time.sleep(2)
-        conn.incr('celery_serverless:watchdog:workers_started')
+        worker_uuid = uuid.uuid1()
+        mybucket = watchdog.inform_worker_join(conn, worker_uuid)
 
-        # Worker gets a job to do, then notify the cache
+        # Worker connecting to the broker
         time.sleep(2)
-        conn.rpop(queue_name)  # Gotten jobs drops from the queue.
-        conn.incr('celery_serverless:watchdog:workers_fulfilled')
 
-        # Note that we do not care where it finished. Just that started
-        # AND got dropped from the queue
+        # Worker got a job. Started working
+        conn.rpop(queue_name)  # Gotten jobs drops from the queue.
+        watchdog.inform_worker_working(conn, worker_uuid)
+        time.sleep(2)
+        # Worker finished the job.
+
+        watchdog.inform_worker_leave(conn, worker_uuid, mybucket)  # Unsubscribe itself from the "working" list.
         logger.warning('Simulating an Worker invocation: END')
 
+    conn.delete('%s*' % watchdog.DEFAULT_BASENAME)
+    assert watchdog.refresh_workers_all_key(conn)[0] == 0, 'The redis is not starting empty'
+
     _simulate_worker_invocation()   # Just be sure that it works.
+
+    assert watchdog.refresh_workers_all_key(conn)[0] == 0, 'Worker simulation is not informing its finish.'
 
     jobs = ['one', 'two', 'three']
     with conn.pipeline() as pipe:
@@ -108,6 +119,7 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
             response = handler_watchdog(None, None)
 
     assert response
-
     assert conn.llen(queue_name) == 0, 'Watchdog finished but the queue is not empty'
-    assert int(conn.get('celery_serverless:watchdog:workers_fulfilled')) >= len(jobs)
+
+    # Should I really test for this?
+    assert watchdog.refresh_workers_all_key(conn)[0] == 0, 'Watchdog finished but not the workers'
