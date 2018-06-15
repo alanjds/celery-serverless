@@ -26,7 +26,7 @@ DEFAULT_BUCKET_EXPIRE = 6 * 60  # 6 minutes
 
 class Watchdog(object):
     def __init__(self, communicator=None, name='', lock=None, watched=None):
-        self._intercom = communicator or StrippedLocMemCache()
+        self._intercom = communicator or MuteIntercom()
         self._name = name or DEFAULT_BASENAME
         self._lock = lock or threading.Lock()
         self._watched = watched
@@ -66,8 +66,8 @@ class Watchdog(object):
         self._pubsub.run_in_thread(daemon=True)
 
     def get_workers_count(self):
-        if not isinstance(self._intercom, StrictRedis):
-            raise NotImplementedError()
+        if hasattr(self._intercom, 'get_workers_count'):
+            return self._intercom.get_workers_count()
         return refresh_workers_all_key(self._intercom)[0]
 
     def get_queue_length(self):
@@ -137,22 +137,9 @@ class Watchdog(object):
         return self.workers_started  # How many had to be started to fulfill the queue?
 
 
-class StrippedLocMemCache(object):
-    # Stripped from Django's LocMemCache.
-    # See: https://github.com/django/django/blob/master/django/core/cache/backends/locmem.py
-    def __init__(self):
-        self._cache = {}
-
-    def get(self, key, default=None):
-        return self._cache.get(key, default)
-
-    def set(self, key, value):
-        self._cache[key] = value
-
-    def incr(self, key, delta=1):
-        self._cache.setdefault(key, 0)
-        self._cache[key] += delta
-        return self.get(key)
+class MuteIntercom(object):
+    def get_workers_count(self):
+        return 0
 
 
 # Queue length with ideas from ryanhiebert/hirefire
