@@ -205,5 +205,5 @@ class Invoker(object):
         return output, future
 
 
-def invoke(target='worker', config=None, *args, **kwargs):
+def invoke(target='watchdog', config=None, *args, **kwargs):
     return Invoker(target=target, config=config).invoke_main(*args, **kwargs)
