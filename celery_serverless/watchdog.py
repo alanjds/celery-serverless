@@ -5,6 +5,7 @@ import operator
 import logging
 import threading
 from functools import partial
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from itertools import count
 from datetime import datetime, timezone, timedelta
@@ -33,6 +34,8 @@ class Watchdog(object):
         self.pool_size = 200
 
         # 0) Clear counters
+        self._unconfirmed_registry = OrderedDict()
+        self.workers_unconfirmed = 0
         self.workers_started = 0
         self.workers_fulfilled = 0
         self._pubsub = self._intercom.pubsub() if isinstance(self._intercom, StrictRedis) else None
@@ -47,6 +50,7 @@ class Watchdog(object):
         def _handle_join_event(message):
             logging.debug('[event:join] Worker joined')
             self.workers_started += 1
+            self.workers_unconfirmed -= 1
 
         channel_working_key = get_workers_all_key(prefix=self._name) + '[working]'
         def _handle_working_event(message):
@@ -64,6 +68,18 @@ class Watchdog(object):
         }
         self._pubsub.subscribe(**self._subscription_hooks)
         self._pubsub.run_in_thread(daemon=True)
+
+    @property
+    def workers_unconfirmed(self):
+        return len(self._unconfirmed_registry)
+
+    @workers_unconfirmed.setter
+    def workers_unconfirmed(self, value:int):
+        if not isinstance(value, int):
+            raise TypeError("This property accepts only 'int' values")
+
+        raise NotImplementedError()
+        self._unconfirmed_registry
 
     def get_workers_count(self):
         if hasattr(self._intercom, 'get_workers_count'):
@@ -85,6 +101,7 @@ class Watchdog(object):
     def trigger_workers(self, how_much:int):
         logger.info('Starting %s workers', how_much)
         self.workers_started = self.workers_fulfilled = 0
+        self.workers_unconfirmed += how_much
 
         triggered = []
         for i in range(how_much):
@@ -124,15 +141,16 @@ class Watchdog(object):
                     break
 
             # 2b) Start (N-existing) workers
-            available_workers = max(self.pool_size - existing_workers, 0)
-            to_trigger = min(queue_length, available_workers)
+            available_workers = self.pool_size - existing_workers - self.workers_unconfirmed
+            available_workers = max(available_workers, 0)
+            to_trigger = min((queue_length - self.workers_unconfirmed), available_workers)
             triggered = self.trigger_workers(to_trigger)
 
             # 3b) Watch for N starts
-            started = self.wait_start_notifications(triggered)
+            # started = self.wait_start_notifications(triggered)
 
             # 4) Watch for N working notifications
-            working = self.wait_working_notifications(started)
+            # working = self.wait_working_notifications(started)
 
         return self.workers_started  # How many had to be started to fulfill the queue?
 
