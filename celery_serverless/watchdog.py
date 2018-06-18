@@ -11,7 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from itertools import count
 from datetime import datetime, timezone, timedelta
 
-import backoff
 from redis import StrictRedis
 from kombu import Connection
 from kombu.transport import pyamqp
