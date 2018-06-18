@@ -24,6 +24,7 @@ invoke_worker = partial(invoke, target='worker')
 
 DEFAULT_BASENAME = 'celery_serverless:watchdog'
 DEFAULT_BUCKET_EXPIRE = 6 * 60  # 6 minutes
+UNCONFIRMED_LIMIT = {'seconds': 30}
 
 
 class Watchdog(object):
@@ -35,10 +36,9 @@ class Watchdog(object):
         self.pool_size = 200
 
         # 0) Clear counters
-        self._unconfirmed_registry = OrderedDict()
-        self.workers_unconfirmed = 0
         self.workers_started = 0
-        self.workers_fulfilled = 0
+        self._unconfirmed_registry = OrderedDict()
+        self._unconfirmed_registry_lock = threading.Lock()
         self._pubsub = self._intercom.pubsub() if isinstance(self._intercom, StrictRedis) else None
         if self._pubsub:
             self._init_pubsub()
@@ -51,12 +51,11 @@ class Watchdog(object):
         def _handle_join_event(message):
             logging.debug('[event:join] Worker joined')
             self.workers_started += 1
-            self.workers_unconfirmed -= 1
 
         channel_working_key = get_workers_all_key(prefix=self._name) + '[working]'
         def _handle_working_event(message):
             logging.debug('[event:working] Worker got a job')
-            self.workers_fulfilled += 1
+            self.confirm_worker()
 
         channel_leave_key = get_workers_all_key(prefix=self._name) + '[leave]'
         def _handle_leave_event(message):
@@ -70,17 +69,44 @@ class Watchdog(object):
         self._pubsub.subscribe(**self._subscription_hooks)
         self._pubsub.run_in_thread(daemon=True)
 
-    @property
-    def workers_unconfirmed(self):
-        return len(self._unconfirmed_registry)
+    def register_unconfirmed_workers(self, how_many=1):
+        assert how_many >= 0, 'do _confirm_worker instead of register negatives'
+        now = datetime.now().replace(microsecond=0)  # Capped to seconds buckets
+        self._unconfirmed_registry.setdefault(now, 0)
+        self._unconfirmed_registry[now] += how_many
 
-    @workers_unconfirmed.setter
-    def workers_unconfirmed(self, value:int):
-        if not isinstance(value, int):
-            raise TypeError("This property accepts only 'int' values")
+    def confirm_worker(self):
+        with self._unconfirmed_registry_lock:
+            now = datetime.now()
 
-        raise NotImplementedError()
-        self._unconfirmed_registry
+            for time, count in self._unconfirmed_registry.items():
+                if time + timedelta(**UNCONFIRMED_LIMIT) < now:
+                    # This register is expired.
+                    self._unconfirmed_registry.pop(time)
+                    continue
+
+                if count > 1:
+                    self._unconfirmed_registry[time] -= 1
+                else:  # 1 or less
+                    self._unconfirmed_registry.pop(time)
+                return True
+
+            # No register found or all already expired
+            return False
+
+    def get_workers_unconfirmed(self):
+        logger.debug('_unconfirmed_registry: %s', pformat(dict(self._unconfirmed_registry)))
+
+        now = datetime.now()
+        valid = 0
+        for time, count in self._unconfirmed_registry.items():
+            if time + timedelta(**UNCONFIRMED_LIMIT) >= now:
+                # Count up the valid times key values
+                valid += count
+            else:
+                # Clear the expired times keys
+                self._unconfirmed_registry.pop(time)
+        return valid
 
     def get_workers_count(self):
         if hasattr(self._intercom, 'get_workers_count'):
@@ -101,29 +127,11 @@ class Watchdog(object):
 
     def trigger_workers(self, how_much:int):
         logger.info('Starting %s workers', how_much)
-        self.workers_started = self.workers_fulfilled = 0
-        self.workers_unconfirmed += how_much
-
-        triggered = []
-        for i in range(how_much):
-            triggered.append(invoke_worker())
-        return len(triggered)
-
-    # Will retry until return 0 or max_time reached
-    @backoff.on_predicate(backoff.constant, predicate=operator.truth, max_time=30)
-    def wait_start_notifications(self, starts:int):
-        started = self.workers_started
-        not_started = starts - started
-        not_served = started - self.workers_fulfilled
-        logger.debug('Started so far: %s  [%s unserved]', started, not_served)
-        return not_started
-
-    # Will retry until return 0 or max_time reached
-    @backoff.on_predicate(backoff.fibo, predicate=operator.truth, max_value=9, max_time=30)
-    def wait_working_notifications(self, started:int):
-        not_served = started - self.workers_fulfilled
-        logger.info('Workers still unserved: %s', not_served)
-        return not_served
+        i = 0
+        for i in range(1, how_much+1):
+            self.register_unconfirmed_workers(1)
+            invoke_worker()
+        return i
 
     def monitor(self):
         for loops in count(1):  # while True
@@ -139,13 +147,20 @@ class Watchdog(object):
                     logger.debug('Empty queue, but still %s workers running', existing_workers)
                 else:  # No queue and no workers: Stop monitoring
                     logger.debug('Empty queue and no worker running. Stop monitoring')
+                    unconfirmed = self.get_workers_unconfirmed()
+                    if unconfirmed:
+                        logger.warning('Exiting with %s still unconfirmed workers!', unconfirmed)
                     break
 
             # 2b) Start (N-existing) workers
-            available_workers = self.pool_size - existing_workers - self.workers_unconfirmed
+            unconfirmed = self.get_workers_unconfirmed()
+            available_workers = self.pool_size - existing_workers - unconfirmed
             available_workers = max(available_workers, 0)
-            to_trigger = min((queue_length - self.workers_unconfirmed), available_workers)
-            triggered = self.trigger_workers(to_trigger)
+            unhandled_queued = queue_length - unconfirmed
+
+            to_trigger = min(unhandled_queued, available_workers)
+            if to_trigger > 0:
+                self.trigger_workers(to_trigger)
 
             # 3b) Watch for N starts
             # started = self.wait_start_notifications(triggered)
