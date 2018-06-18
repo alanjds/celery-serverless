@@ -4,6 +4,7 @@ import time
 import operator
 import logging
 import threading
+from pprint import pformat
 from functools import partial
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
@@ -194,7 +195,7 @@ class KombuQueueLengther(object):
         result = self.connection.channel()._size(self.queue)
 
         # Kombu queue length will not change until next heartbeat.
-        # Would be better to use some token-bucket timeout,
+        # Would be better to use a token-bucket timeout,
         # but some `time.delay()` will do for now.
         self._maybe_dirty = True
         return result
