@@ -7,7 +7,7 @@ import threading
 from pprint import pformat
 from functools import partial
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import count
 from datetime import datetime, timezone, timedelta
 
@@ -135,11 +135,23 @@ class Watchdog(object):
 
     def trigger_workers(self, how_much:int):
         logger.info('Starting %s workers', how_much)
-        i = 0
-        for i in range(1, how_much+1):
-            self.register_unconfirmed_workers(1)
-            invoke_worker()
-        return i
+        success_calls = 0
+        invocations = []
+        for i in range(how_much):
+            triggered, future = invoke_worker()
+            if triggered:
+                self.register_unconfirmed_workers(1)
+            invocations.append(future)
+
+        for future in as_completed(invocations):
+            try:
+                future.result()
+                success_calls += 1
+            except Exception as err:
+                self.confirm_worker()  # Confirmed as failed
+                logger.error('Invocation failed', exc_info=1)
+
+        return success_calls
 
     def monitor(self):
         for loops in count(1):  # while True
