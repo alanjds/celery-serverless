@@ -37,12 +37,17 @@ def test_worker_handler_minimal_call():
 
 
 def test_watchdog_handler_minimal_call():
-    with env.set_env(CELERY_SERVERLESS_LOCK_URL='disabled', CELERY_SERVERLESS_QUEUE_URL='disabled'):
+    _env = dict(
+        CELERY_SERVERLESS_QUEUE_URL='disabled',
+        CELERY_SERVERLESS_LOCK_URL='disabled',
+        CELERY_SERVERLESS_INTERCOM_URL='disabled',
+    )
+    with env.set_env(**_env):
         response = handler_watchdog(None, None)
     assert response
 
 
-_needed_parameters = ['CELERY_SERVERLESS_LOCK_URL', 'CELERY_SERVERLESS_QUEUE_URL']
+_needed_parameters = ['CELERY_SERVERLESS_LOCK_URL', 'CELERY_SERVERLESS_QUEUE_URL', 'CELERY_SERVERLESS_INTERCOM_URL']
 @pytest.mark.parametrize('envname', _needed_parameters)
 def test_watchdog_needs_envvar(envname):
     try:
@@ -115,7 +120,12 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
             lambda: (True, executor.submit(_simulate_worker_invocation)),
         )
 
-        with env.set_env(CELERY_SERVERLESS_QUEUE_URL=queue_url, CELERY_SERVERLESS_LOCK_URL=queue_url):
+        _env = dict(
+            CELERY_SERVERLESS_QUEUE_URL=queue_url,
+            CELERY_SERVERLESS_LOCK_URL=queue_url,
+            CELERY_SERVERLESS_INTERCOM_URL=queue_url,
+        )
+        with env.set_env(**_env):
             response = handler_watchdog(None, None)
 
     assert response
