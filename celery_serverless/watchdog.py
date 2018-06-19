@@ -28,7 +28,7 @@ UNCONFIRMED_LIMIT = {'seconds': 30}
 
 class Watchdog(object):
     def __init__(self, communicator=None, name='', lock=None, watched=None):
-        self._intercom = communicator or MuteIntercom()
+        self._intercom = communicator
         self._name = name or DEFAULT_BASENAME
         self._lock = lock or threading.Lock()
         self._watched = watched
@@ -228,7 +228,19 @@ def get_workers_bucket_key(prefix=DEFAULT_BASENAME, now=None):
     return '%s:workers:%s' % (prefix, this_minute.isoformat())
 
 
+def build_intercom(intercom):
+    if not intercom or intercom == 'disabled':
+        return MuteIntercom()
+    elif isinstance(intercom, (bytes, str)):
+        return StrictRedis.from_url(intercom)
+    else:
+        raise NotImplementedError()
+
+
 def inform_worker_join(redis:'StrictRedis', worker_id:str, bucket='', prefix=DEFAULT_BASENAME, now=None):
+    if isinstance(redis, MuteIntercom):
+        return None
+
     bucket = bucket or get_workers_bucket_key(prefix=prefix, now=now)
     with redis.pipeline() as pipe:
         pipe.sadd(bucket, worker_id)
@@ -239,10 +251,15 @@ def inform_worker_join(redis:'StrictRedis', worker_id:str, bucket='', prefix=DEF
 
 
 def inform_worker_working(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAME):
+    if isinstance(redis, MuteIntercom):
+        return None
     return redis.publish(get_workers_all_key(prefix=prefix) + '[working]', worker_id)
 
 
 def inform_worker_leave(redis:'StrictRedis', worker_id:str, bucket:str):
+    if isinstance(redis, MuteIntercom):
+        return None
+
     with redis.pipeline() as pipe:
         pipe.srem(bucket, worker_id)
         pipe.publish(get_workers_all_key() + '[leave]', worker_id)
@@ -251,6 +268,9 @@ def inform_worker_leave(redis:'StrictRedis', worker_id:str, bucket:str):
 
 
 def refresh_workers_all_key(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=None, minutes=5):
+    if isinstance(redis, MuteIntercom):
+        return None, None, None
+
     workers_all_key = get_workers_all_key(prefix=prefix)
 
     this_minute = _cap_to_minute(now or datetime.now(timezone.utc))

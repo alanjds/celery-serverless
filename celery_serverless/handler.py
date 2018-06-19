@@ -17,7 +17,7 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 from redlock import RedLock
-from celery_serverless.watchdog import Watchdog, KombuQueueLengther
+from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
@@ -68,19 +68,17 @@ def watchdog(event, context):
 
     if lock_url == 'disabled':
         lock = None
-        communicator = None
     elif lock_url.startswith(('redis://', 'rediss://')):
         lock = RedLock(lock_name, connection_details=[{'url': node} for node in lock_url.split(',')])
-        communicator = lock.redis_nodes[0]  # Using the Lock redis as values cache
     else:
-        raise RuntimeWarning("This URL is not supported. Only 'redis[s]://...' is supported for now")
+        raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
 
     if queue_url == 'disabled':
         watched = None
     else:
         watched = KombuQueueLengther(queue_url, 'celery')   # TODO: Allow queue name to be chosen
 
-    Watchdog(communicator=communicator, name=lock_name, lock=lock, watched=watched).monitor()
+    Watchdog(communicator=build_intercom(intercom_url), name=lock_name, lock=lock, watched=watched).monitor()
 
     logger.debug('Cleaning up before exit')
     body = {
