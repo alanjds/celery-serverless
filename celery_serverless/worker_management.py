@@ -11,6 +11,8 @@ import celery.worker.request
 from celery.signals import celeryd_init, worker_ready, task_prerun, task_postrun, task_success
 from celery.exceptions import WorkerShutdown
 
+from celery_serverless import watchdog
+
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
@@ -111,16 +113,25 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
 
+    context['worker_watchdog'] = {'intercom': '???'}
+
     @celeryd_init.connect  # After worker process up
     def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
         logger.debug('Connecting to the broker [celeryd_init]')
         context['worker'] = worker = instance
+        context['worker_watchdog']['uuid'] = uuid = uuid1()
+        intercom = context['worker_watchdog']['intercom']
 
         worker.__broker_connected = False
         def _maybe_shutdown(*args, **kwargs):
             assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
             logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
             raise WorkerShutdown()
+
+        # Inform the Watchdog Monitor [join]
+        context['worker_watchdog']['bucket'] = watchdog.inform_worker_join(intercom, uuid)
+
+        # Return the hook attached. Should be hold to prevent collection as garbage
         return wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
 
     # #######
@@ -141,6 +152,10 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
 
         # HACK: (Re)start to listen the queue. Could had been silenced before.
         worker.consumer.add_task_queue('celery')  # TODO: Select the queue dynamically
+
+        # Inform the Watchdog Monitor [working]
+        watchdog_context = context['worker_watchdog']
+        watchdog.inform_worker_working(watchdog_context['intercom'], watchdog_context['uuid'])
 
         def _maybe_shutdown(*args, **kwargs):
             if worker.__task_received:
@@ -185,6 +200,9 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
         # See: https://gist.github.com/lovemyliwu/af5112de25b594205a76c3bfd00b9340
         worker.consumer.connection._default_channel.do_restore = False
 
+        # Inform the Watchdog Monitor [leave]
+        watchdog_context = context['worker_watchdog']
+        watchdog.inform_worker_leave(watchdog_context['intercom'], watchdog_context['uuid'], watchdog_context['bucket'])
         raise WorkerShutdown()
 
     # Using weak references. Is up to the caller to store the callbacks produced
