@@ -78,16 +78,21 @@ class Watchdog(object):
     def confirm_worker(self):
         with self._unconfirmed_registry_lock:
             now = datetime.now()
-
+            time = None
+            expired = []
             for time, count in self._unconfirmed_registry.items():
                 if time + timedelta(**UNCONFIRMED_LIMIT) < now:
                     # This register is expired.
-                    self._unconfirmed_registry.pop(time)
+                    expired.append(time)
                     continue
-
                 # Found!
                 break
-            else:
+
+            # Clean the expired ones
+            for k in expired:
+                self._unconfirmed_registry.pop(k)
+
+            if time is None:
                 # No register found or all already expired
                 return False
 
