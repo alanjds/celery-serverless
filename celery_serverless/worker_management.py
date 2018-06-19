@@ -2,6 +2,7 @@
 import os
 import signal
 import logging
+from uuid import uuid1
 from functools import partial
 
 import celery.bin.celery
