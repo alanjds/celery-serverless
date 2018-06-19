@@ -3,6 +3,6 @@ celery~=4.2.0
 ruamel.yaml~=0.15.37
 boto3~=1.7.6
 botocore~=1.8.21
-aioboto3~=3.0.0
+aioboto3~=4.0.1
 future-thread~=1.0
 redlock~=1.2.0

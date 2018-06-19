@@ -52,7 +52,7 @@ setup(
     extras_require={
         'boto3': [
             'boto3>=1.7.0',
-            'aioboto3>=3.0.0',
+            'aioboto3>=4.0.1',
         ],
         'wdb': [
             'wdb>=3.2.1',
