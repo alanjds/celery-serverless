@@ -84,27 +84,36 @@ class Watchdog(object):
                     self._unconfirmed_registry.pop(time)
                     continue
 
-                if count > 1:
-                    self._unconfirmed_registry[time] -= 1
-                else:  # 1 or less
-                    self._unconfirmed_registry.pop(time)
-                return True
+                # Found!
+                break
+            else:
+                # No register found or all already expired
+                return False
 
-            # No register found or all already expired
-            return False
+            # Consume the found stuff.
+            if count > 1:
+                self._unconfirmed_registry[time] -= 1
+            else:  # 1 or less
+                self._unconfirmed_registry.pop(time)
+
+            return True
 
     def get_workers_unconfirmed(self):
         logger.debug('_unconfirmed_registry: %s', pformat(dict(self._unconfirmed_registry)))
 
         now = datetime.now()
         valid = 0
+        invalid = []
         for time, count in self._unconfirmed_registry.items():
             if time + timedelta(**UNCONFIRMED_LIMIT) >= now:
                 # Count up the valid times key values
                 valid += count
             else:
-                # Clear the expired times keys
-                self._unconfirmed_registry.pop(time)
+                invalid.append(time)
+
+        # Clear the expired times keys
+        for k in invalid:
+            self._unconfirmed_registry.pop(k)
         return valid
 
     def get_workers_count(self):
