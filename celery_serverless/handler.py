@@ -23,7 +23,7 @@ hooks = []
 
 
 @handler_wrapper
-def worker(event, context):
+def worker(event, context, intercom_url=None):
     global hooks
 
     try:
@@ -37,7 +37,7 @@ def worker(event, context):
 
     if not hooks:
         logger.debug('Fresh Celery worker. Attach hooks!')
-        hooks = attach_hooks()
+        hooks = attach_hooks(intercom_url=intercom_url)
     else:
         logger.debug('Old Celery worker. Already have hooks.')
 

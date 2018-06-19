@@ -99,7 +99,7 @@ def cancel_wakeme():
     signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
 
 
-def attach_hooks(wait_connection=8.0, wait_job=4.0):
+def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
     """
     Register the needed hooks:
     - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
@@ -113,7 +113,7 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
 
-    intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+    intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
     assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
 
     context['worker_watchdog'] = {'intercom': watchdog.build_intercom(intercom_url)}
