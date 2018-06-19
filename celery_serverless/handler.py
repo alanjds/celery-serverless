@@ -66,6 +66,9 @@ def watchdog(event, context):
     queue_url = os.environ.get('CELERY_SERVERLESS_QUEUE_URL')
     assert queue_url, 'The CELERY_SERVERLESS_QUEUE_URL envvar should be set. Even to "disabled" to disable it.'
 
+    intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+    assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+
     if lock_url == 'disabled':
         lock = None
     elif lock_url.startswith(('redis://', 'rediss://')):

@@ -32,7 +32,8 @@ def test_command_line_interface():
 
 
 def test_worker_handler_minimal_call():
-    response = handler_worker(None, None)
+    with env.set_env(CELERY_SERVERLESS_INTERCOM_URL='disabled'):
+        response = handler_worker(None, None)
     assert response
 
 

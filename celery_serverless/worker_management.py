@@ -113,7 +113,10 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
 
-    context['worker_watchdog'] = {'intercom': '???'}
+    intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+    assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+
+    context['worker_watchdog'] = {'intercom': watchdog.build_intercom(intercom_url)}
 
     @celeryd_init.connect  # After worker process up
     def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
