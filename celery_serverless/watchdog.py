@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import count
 from datetime import datetime, timezone, timedelta
 
+import backoff
 from redis import StrictRedis
 from kombu import Connection
 from kombu.transport import pyamqp
@@ -224,6 +225,7 @@ class KombuQueueLengther(object):
         self.queue = queue
         self._maybe_dirty = False
 
+    @backoff.on_exception(backoff.fibo, ConnectionError, max_value=9, max_time=30, jitter=backoff.full_jitter)
     def __len__(self):
         if self._maybe_dirty:
             time.sleep(self.KOMBU_HEARTBEAT * 1.5)
