@@ -2,7 +2,6 @@
 import os
 import signal
 import logging
-from uuid import uuid1
 
 import celery.bin.celery
 import celery.worker.state
@@ -103,7 +102,8 @@ def cancel_wakeme():
 def _shutdown_worker(context):
     # Inform the Watchdog Monitor [leave]
     watchdog_context = context['worker_watchdog']
-    watchdog.inform_worker_leave(watchdog_context['intercom'], watchdog_context['uuid'], watchdog_context['bucket'])
+    raise NotImplementedError('Populate uuid from context provided from watchdog')
+    watchdog.inform_worker_leave(watchdog_context['intercom'], watchdog_context['uuid'])
     raise WorkerShutdown()
 
 
@@ -130,17 +130,12 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
     def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
         logger.debug('Connecting to the broker [celeryd_init]')
         context['worker'] = worker = instance
-        context['worker_watchdog']['uuid'] = uuid = uuid1()
-        intercom = context['worker_watchdog']['intercom']
 
         worker.__broker_connected = False
         def _maybe_shutdown(*args, **kwargs):
             assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
             logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
             _shutdown_worker(context)
-
-        # Inform the Watchdog Monitor [join]
-        context['worker_watchdog']['bucket'] = watchdog.inform_worker_join(intercom, uuid)
 
         # Set shutdown signal in case we don't connect in wait_connection seconds
         wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
@@ -182,10 +177,6 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
 
         logger.info('Task received! [task_prerun]')
         cancel_wakeme()
-
-        # Inform the Watchdog Monitor [working]
-        watchdog_context = context['worker_watchdog']
-        watchdog.inform_worker_working(watchdog_context['intercom'], watchdog_context['uuid'])
 
         # New task should be rejected and returned if one was already processed.
         worker.consumer.connection._default_channel.do_restore = True
