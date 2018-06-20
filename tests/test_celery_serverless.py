@@ -84,18 +84,24 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
 
         # Worker takes some time to init, then notify the Cache
         time.sleep(2)
+        # celeryd_init hook happens at this point
         worker_uuid = uuid.uuid1()
         mybucket = watchdog.inform_worker_join(conn, worker_uuid)
 
         # Worker connecting to the broker
         time.sleep(2)
+        # worker_ready hook happens at this point
+        # Delay to acquire the task
+        time.sleep(0.5)
+        conn.rpop(queue_name)  # Simulate task removal from the queue.
 
-        # Worker got a job. Started working
-        conn.rpop(queue_name)  # Gotten jobs drops from the queue.
+        # task_prerun hook happens at this point
         watchdog.inform_worker_working(conn, worker_uuid)
+        # Worker got a job. Started working
         time.sleep(2)
         # Worker finished the job.
 
+        # task_postrun hook happens at this point
         watchdog.inform_worker_leave(conn, worker_uuid, mybucket)  # Unsubscribe itself from the "working" list.
         logger.warning('Simulating an Worker invocation: END')
 
