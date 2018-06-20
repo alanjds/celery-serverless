@@ -8,12 +8,10 @@ import uuid
 import logging
 import pytest
 from pytest_shutil import env
-from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 from click.testing import CliRunner
 
-import celery_serverless
 from celery_serverless import cli, watchdog
 from celery_serverless import handler_worker, handler_watchdog
 
