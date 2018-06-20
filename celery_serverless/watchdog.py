@@ -243,7 +243,7 @@ class KombuQueueLengther(object):
         return result
 
 
-def _cap_to_minute(now):
+def _truncate_to_minute(now):
     return now.replace(second=0, microsecond=0)
 
 
@@ -252,7 +252,7 @@ def get_workers_all_key(prefix=DEFAULT_BASENAME):
 
 
 def get_workers_bucket_key(prefix=DEFAULT_BASENAME, now=None):
-    this_minute = _cap_to_minute(now or datetime.now(timezone.utc))
+    this_minute = _truncate_to_minute(now or datetime.now(timezone.utc))
     return '%s:workers:%s' % (prefix, this_minute.isoformat())
 
 
@@ -301,7 +301,7 @@ def refresh_workers_all_key(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=No
 
     workers_all_key = get_workers_all_key(prefix=prefix)
 
-    this_minute = _cap_to_minute(now or datetime.now(timezone.utc))
+    this_minute = _truncate_to_minute(now or datetime.now(timezone.utc))
     worker_buckets = []
     for i in range(minutes):
         target_time = this_minute - timedelta(minutes=i)
