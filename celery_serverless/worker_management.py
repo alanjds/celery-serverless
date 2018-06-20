@@ -3,7 +3,6 @@ import os
 import signal
 import logging
 from uuid import uuid1
-from functools import partial
 
 import celery.bin.celery
 import celery.worker.state
@@ -134,8 +133,8 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
         # Inform the Watchdog Monitor [join]
         context['worker_watchdog']['bucket'] = watchdog.inform_worker_join(intercom, uuid)
 
-        # Return the hook attached. Should be hold to prevent collection as garbage
-        return wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
+        # Set shutdown signal in case we don't connect in wait_connection seconds
+        wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
 
     # #######
     # @worker_init.connect  # Before connecting, if -P solo
@@ -166,7 +165,7 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
             else:
                 logger.info('Shutting down. Never received a Task [callback:worker_ready]')
                 raise WorkerShutdown()
-        return wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
+        wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
 
     @task_prerun.connect  # Task already got.
     def _unset_watchdogs(*args, **kwargs):
