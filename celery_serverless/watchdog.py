@@ -1,13 +1,11 @@
 # coding: utf-8
-import os
 import time
-import operator
 import logging
 import threading
 from pprint import pformat
 from functools import partial
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
 from itertools import count
 from datetime import datetime, timezone, timedelta
 
@@ -205,20 +203,20 @@ class MuteIntercom(object):
 # Queue length with ideas from ryanhiebert/hirefire
 # See: https://github.com/ryanhiebert/hirefire/blob/67d57c8/hirefire/procs/celery.py#L239
 def _AMQPChannel_size(self, queue):
-        try:
-            from librabbitmq import ChannelError
-        except ImportError:
-            from amqp.exceptions import ChannelError
+    try:
+        from librabbitmq import ChannelError
+    except ImportError:
+        from amqp.exceptions import ChannelError
 
-        try:
-            queue = self.queue_declare(queue, passive=True)
-        except ChannelError:
-            # The requested queue has not been created yet
-            count = 0
-        else:
-            count = queue.message_count
+    try:
+        queue = self.queue_declare(queue, passive=True)
+    except ChannelError:
+        # The requested queue has not been created yet
+        count = 0
+    else:
+        count = queue.message_count
 
-        return count
+    return count
 pyamqp.Channel._size = _AMQPChannel_size
 
 
