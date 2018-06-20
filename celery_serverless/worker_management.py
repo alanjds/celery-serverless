@@ -84,6 +84,8 @@ def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args,
     """
     Sets an alarm via Unix SIGALRM up to 'seconds' ahead.
     Then calls the 'callback'.
+    Only ONE alarm can exist at a time. If this function is called multiple times, only the
+    last call remains active.
     """
     if reason:
         reason = 'waiting for "%s"' % reason
@@ -96,6 +98,13 @@ def cancel_wakeme():
     """Disables the actual Unix SIGALRM set, if any"""
     signal.signal(signal.SIGALRM, signal.SIG_DFL)   # Play safe
     signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
+
+
+def _shutdown_worker(context):
+    # Inform the Watchdog Monitor [leave]
+    watchdog_context = context['worker_watchdog']
+    watchdog.inform_worker_leave(watchdog_context['intercom'], watchdog_context['uuid'], watchdog_context['bucket'])
+    raise WorkerShutdown()
 
 
 def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
@@ -128,7 +137,7 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
         def _maybe_shutdown(*args, **kwargs):
             assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
             logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
-            raise WorkerShutdown()
+            _shutdown_worker(context)
 
         # Inform the Watchdog Monitor [join]
         context['worker_watchdog']['bucket'] = watchdog.inform_worker_join(intercom, uuid)
@@ -155,16 +164,14 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
         # HACK: (Re)start to listen the queue. Could had been silenced before.
         worker.consumer.add_task_queue('celery')  # TODO: Select the queue dynamically
 
-        # Inform the Watchdog Monitor [working]
-        watchdog_context = context['worker_watchdog']
-        watchdog.inform_worker_working(watchdog_context['intercom'], watchdog_context['uuid'])
-
         def _maybe_shutdown(*args, **kwargs):
             if worker.__task_received:
                 logger.debug('Keep going. Task received [callback:worker_ready]')
             else:
                 logger.info('Shutting down. Never received a Task [callback:worker_ready]')
-                raise WorkerShutdown()
+                _shutdown_worker(context)
+        # only one alarm SIGALRM is allowed to exist at a time
+        # this cancels any previous alarms and set a new one
         wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
 
     @task_prerun.connect  # Task already got.
@@ -175,6 +182,10 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
 
         logger.info('Task received! [task_prerun]')
         cancel_wakeme()
+
+        # Inform the Watchdog Monitor [working]
+        watchdog_context = context['worker_watchdog']
+        watchdog.inform_worker_working(watchdog_context['intercom'], watchdog_context['uuid'])
 
         # New task should be rejected and returned if one was already processed.
         worker.consumer.connection._default_channel.do_restore = True
@@ -202,10 +213,7 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url=None):
         # See: https://gist.github.com/lovemyliwu/af5112de25b594205a76c3bfd00b9340
         worker.consumer.connection._default_channel.do_restore = False
 
-        # Inform the Watchdog Monitor [leave]
-        watchdog_context = context['worker_watchdog']
-        watchdog.inform_worker_leave(watchdog_context['intercom'], watchdog_context['uuid'], watchdog_context['bucket'])
-        raise WorkerShutdown()
+        _shutdown_worker(context)
 
     # Using weak references. Is up to the caller to store the callbacks produced
     return [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _demand_shutdown]
