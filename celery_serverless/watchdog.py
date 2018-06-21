@@ -12,15 +12,13 @@ import backoff
 from redis import StrictRedis
 from kombu import Connection
 from kombu.transport import pyamqp
-from celery_serverless.invoker import invoke
+from celery_serverless.invoker import invoke_worker
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
-invoke_worker = partial(invoke, target='worker')
-
 DEFAULT_BASENAME = 'celery_serverless:watchdog'
-DEFAULT_BUCKET_EXPIRE = 6 * 60  # 6 minutes
+DEFAULT_WORKER_EXPIRE = 6 * 60  # 6 minutes
 UNCONFIRMED_LIMIT = {'seconds': 30}
 
 
@@ -36,7 +34,6 @@ class Watchdog(object):
         self.joined_event_count = 0
 
     def get_workers_count(self):
-        raise NotImplementedError()
         if hasattr(self._intercom, 'get_workers_count'):
             return self._intercom.get_workers_count()
         return refresh_workers_all_key(self._intercom)[0]
@@ -53,30 +50,41 @@ class Watchdog(object):
     # Actions:
     #
 
-    def _inform_new_worker(self, worker_id: str):
+    def _inform_worker_new(self, worker_id: str):
         """
         Inform the central state in self._intercom that a new worker joined.
         Sets the expiration of the state.
         """
-        raise NotImplementedError('Create a new redis key and set the expiration')
         if isinstance(self._intercom, MuteIntercom):
             return None
 
-        with self._intercom.pipeline() as pipe:
-            pipe.sadd(bucket, worker_id)
-            pipe.expire(bucket, DEFAULT_BUCKET_EXPIRE)
-            pipe.execute()
-        return key
+        metadata = {
+            'id': worker_id,
+            'time_join': datetime.now(timezone.utc),
+        }
+        worker_key = _get_workers_key_prefix(prefix=self._name) + worker_id
 
-    def trigger_worker(self):
+        with self._intercom.pipeline() as pipe:
+            pipe.hmset(worker_key, metadata)
+            pipe.expire(worker_key, DEFAULT_WORKER_EXPIRE)
+            result, _ = pipe.execute()
+
+        return (worker_key, metadata) if result else result
+
+    def _trigger_worker(self) -> tuple:
         """
-        Generates a new worker id, adds a REDIS key with this id and the current timestamp
-        and invokes the worker.
-        :return: A tuple: (Triggered worker ID,) + invoke_worker()
+        Generates a new worker id, adds a REDIS key with this id and the current
+        timestamp and invokes the worker.
+
+        :return: invoke_worker() + (new worker worker_id,)
         """
         worker_uuid = uuid.uuid1()
-        self._inform_new_worker(worker_uuid)
-        return invoke_worker(worker_id=worker_uuid, worker_trigger_time=datetime.now()) + (worker_uuid,)
+        _, worker_data = self._inform_worker_new(worker_uuid)
+        invocation_result = invoke_worker(data={
+            'worker_id': worker_data['id'],
+            'worker_trigger_time': datetime.now() + (worker_uuid,),
+        })
+        return invocation_result + (worker_data, )
 
     def trigger_workers(self, how_many:int):
         if not how_many:
@@ -85,7 +93,7 @@ class Watchdog(object):
         success_calls = 0
         invocations = []
         for i in range(how_many):
-            triggered, future, worker_id = self.trigger_worker()
+            triggered, future, worker_id = self._trigger_worker()
             invocations.append(future)
 
         for future in as_completed(invocations):
@@ -187,25 +195,20 @@ def inform_worker_leave(redis:'StrictRedis', worker_id:str):
     return was_removed
 
 
+def _get_workers_all_key(prefix=DEFAULT_BASENAME):
+    return '%s:workers:all' % prefix
+
+
+def _get_workers_key_prefix(prefix=DEFAULT_BASENAME):
+    return '%s:workers:' % prefix
+
+
 def refresh_workers_all_key(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=None, minutes=5):
-    raise NotImplementedError()
-
-    def get_workers_all_key(prefix=DEFAULT_BASENAME):
-        return '%s:workers:all' % prefix
-
-    def get_workers_bucket_key(prefix=DEFAULT_BASENAME, now=None):
-        return '%s:workers:%s' % (prefix, this_minute.isoformat())
-
     if isinstance(redis, MuteIntercom):
         return None, None, None
 
+    raise NotImplementedError()
     workers_all_key = get_workers_all_key(prefix=prefix)
-
-    this_minute = _truncate_to_minute(now or datetime.now(timezone.utc))
-    worker_buckets = []
-    for i in range(minutes):
-        target_time = this_minute - timedelta(minutes=i)
-        worker_buckets.append(get_workers_bucket_key(prefix=prefix, now=target_time))
 
     with redis.pipeline() as pipe:
         pipe.sunionstore(workers_all_key, worker_buckets)

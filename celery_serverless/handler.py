@@ -25,6 +25,7 @@ hooks = []
 @handler_wrapper
 def worker(event, context, intercom_url=None):
     global hooks
+    event = event or {}
 
     try:
         remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
@@ -37,7 +38,7 @@ def worker(event, context, intercom_url=None):
 
     if not hooks:
         logger.debug('Fresh Celery worker. Attach hooks!')
-        hooks = attach_hooks(intercom_url=intercom_url)
+        hooks = attach_hooks(intercom_url=intercom_url, worker_id=event.get('worker_id'))
     else:
         logger.debug('Old Celery worker. Already have hooks.')
 
