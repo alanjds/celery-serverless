@@ -36,7 +36,7 @@ class Watchdog(object):
     def get_workers_count(self):
         if hasattr(self._intercom, 'get_workers_count'):
             return self._intercom.get_workers_count()
-        return refresh_workers_all_key(self._intercom)[0]
+        return refresh_workers_all_key(self._intercom)
 
     def get_queue_length(self):
         if self._watched is None:
@@ -78,11 +78,11 @@ class Watchdog(object):
 
         :return: invoke_worker() + (new worker worker_id,)
         """
-        worker_uuid = uuid.uuid1()
+        worker_uuid = str(uuid.uuid1())
         _, worker_data = self._inform_worker_new(worker_uuid)
         invocation_result = invoke_worker(data={
             'worker_id': worker_data['id'],
-            'worker_trigger_time': datetime.now() + (worker_uuid,),
+            'worker_trigger_time': datetime.now(),
         })
         return invocation_result + (worker_data, )
 
