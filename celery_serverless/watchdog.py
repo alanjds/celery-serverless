@@ -123,8 +123,11 @@ class Watchdog(object):
             # 2b) Start (N-existing) workers
             available_workers = self.pool_size - existing_workers
             available_workers = max(available_workers, 0)
+            warming_workers = existing_workers - self.working_workers
+            needed_workers = queue_length - warming_workers
+            desired_new_workers = min(needed_workers, available_workers)
 
-            self.trigger_workers(available_workers)
+            self.trigger_workers(desired_new_workers)
 
         return self.joined_event_count  # How many had to be started to fulfill the queue?
 
