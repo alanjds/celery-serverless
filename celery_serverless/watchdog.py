@@ -184,15 +184,10 @@ def build_intercom(intercom):
         raise NotImplementedError()
 
 
-def inform_worker_leave(redis:'StrictRedis', worker_id:str):
-    raise NotImplementedError()
+def inform_worker_leave(redis:'StrictRedis', worker_key:str):
     if isinstance(redis, MuteIntercom):
         return None
-
-    with redis.pipeline() as pipe:
-        pipe.srem((get_workers_all_key(), worker_id))
-        was_removed, _ = pipe.execute()
-    return was_removed
+    return redis.delete(worker_key)  # TODO: Use "UNLINK" instead of "DEL"
 
 
 def _get_workers_all_key(prefix=DEFAULT_BASENAME):
@@ -205,14 +200,7 @@ def _get_workers_key_prefix(prefix=DEFAULT_BASENAME):
 
 def refresh_workers_all_key(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=None, minutes=5):
     if isinstance(redis, MuteIntercom):
-        return None, None, None
+        return None
 
-    raise NotImplementedError()
-    workers_all_key = get_workers_all_key(prefix=prefix)
-
-    with redis.pipeline() as pipe:
-        pipe.sunionstore(workers_all_key, worker_buckets)
-        pipe.expire(workers_all_key, DEFAULT_BUCKET_EXPIRE)
-        workers_len, _ = pipe.execute()
-
-    return workers_len, workers_all_key, worker_buckets
+    workers_all_glob = _get_workers_key_prefix(prefix=prefix) + '?*'
+    return len(redis.keys(workers_all_glob))
