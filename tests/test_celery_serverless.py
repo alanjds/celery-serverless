@@ -83,9 +83,7 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
         # Worker takes some time to init, then notify the Cache
         time.sleep(2)
         # celeryd_init hook happens at this point
-        raise NotImplementedError('Get uuid from context')
-        worker_uuid = uuid.uuid1()
-        # mybucket = watchdog.inform_worker_join(conn, worker_uuid)
+        worker_uuid = str(uuid.uuid1())
 
         # Worker connecting to the broker
         time.sleep(2)
@@ -95,7 +93,8 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
         conn.rpop(queue_name)  # Simulate task removal from the queue.
 
         # task_prerun hook happens at this point
-        # watchdog.inform_worker_working(conn, worker_uuid)
+        watchdog.inform_worker_working(conn, worker_uuid)
+
         # Worker got a job. Started working
         time.sleep(2)
         # Worker finished the job.
@@ -104,12 +103,12 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
         watchdog.inform_worker_leave(conn, worker_uuid)  # Unsubscribe itself from the "working" list.
         logger.warning('Simulating an Worker invocation: END')
 
-    conn.delete('%s*' % watchdog.DEFAULT_BASENAME)
-    assert watchdog.refresh_workers_all_key(conn)[0] == 0, 'The redis is not starting empty'
+    conn.flushdb()
+    assert watchdog.refresh_workers_all_key(conn) == 0, 'The redis is not starting empty'
 
     _simulate_worker_invocation()   # Just be sure that it works.
 
-    assert watchdog.refresh_workers_all_key(conn)[0] == 0, 'Worker simulation is not informing its finish.'
+    assert watchdog.refresh_workers_all_key(conn) == 0, 'Worker simulation is not informing its finish.'
 
     jobs = ['one', 'two', 'three']
     with conn.pipeline() as pipe:
@@ -123,7 +122,7 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
     with ThreadPoolExecutor() as executor:
         monkeypatch.setattr(
             'celery_serverless.watchdog.invoke_worker',
-            lambda: (True, executor.submit(_simulate_worker_invocation)),
+            lambda data: (True, executor.submit(_simulate_worker_invocation, data=data)),
         )
 
         _env = dict(
@@ -138,4 +137,4 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
     assert conn.llen(queue_name) == 0, 'Watchdog finished but the queue is not empty'
 
     # Should I really test for this?
-    assert watchdog.refresh_workers_all_key(conn)[0] == 0, 'Watchdog finished but not the workers'
+    assert watchdog.refresh_workers_all_key(conn) == 0, 'Watchdog finished but not the workers'
