@@ -88,14 +88,7 @@ class Watchdog(object):
             if triggered:
                 invocations.append(future)
 
-        success_calls = 0
-        for future in as_completed(invocations):
-            try:
-                future.result()
-                success_calls += 1
-            except Exception as err:
-                logger.error('Invocation failed', exc_info=1)
-        return success_calls
+        return len(invocations)  # success_calls
 
     def monitor(self):
         for loops in count(1):  # while True
