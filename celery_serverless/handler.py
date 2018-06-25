@@ -38,7 +38,7 @@ def worker(event, context, intercom_url=None):
 
     if not hooks:
         logger.debug('Fresh Celery worker. Attach hooks!')
-        hooks = attach_hooks(intercom_url=intercom_url, worker_id=event.get('worker_id'))
+        hooks = attach_hooks(intercom_url=intercom_url, worker_metadata=event or {})
     else:
         logger.debug('Old Celery worker. Already have hooks.')
 

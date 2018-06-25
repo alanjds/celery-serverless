@@ -103,11 +103,15 @@ def cancel_wakeme():
 def _shutdown_worker(context):
     # Inform the Watchdog Monitor [leave]
     watchdog_context = context['worker_watchdog']
-    watchdog.inform_worker_leave(watchdog_context['intercom'], watchdog_context['worker_id'])
+    watchdog.inform_worker_leave(
+        watchdog_context['intercom'],
+        watchdog_context['worker_id'],
+        prefix=watchdog_context['prefix'],
+    )
     raise WorkerShutdown()
 
 
-def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url='', worker_id=''):
+def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url='', worker_metadata=None):
     """
     Register the needed hooks:
     - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
@@ -122,10 +126,18 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url='', worker_id='
     logger.debug('Wait job time: %.2f', wait_job)
 
     intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
-    worker_id = worker_id or uuid.uuid1()
+    worker_metadata = worker_metadata or {
+        'worker_id': uuid.uuid1(),
+        'prefix': '(undefined)',
+    }
     assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
 
-    context['worker_watchdog'] = {'intercom': watchdog.build_intercom(intercom_url), 'worker_id': worker_id}
+    context['worker_watchdog'] = {
+        'intercom': watchdog.build_intercom(intercom_url),
+        'worker_metadata': worker_metadata,
+        'worker_id': worker_metadata['worker_id'],
+        'prefix': worker_metadata['prefix'],
+    }
 
     @celeryd_init.connect  # After worker process up
     def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
