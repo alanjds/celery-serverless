@@ -36,7 +36,12 @@ class Watchdog(object):
     def get_workers_count(self):
         if hasattr(self._intercom, 'get_workers_count'):
             return self._intercom.get_workers_count()
-        return refresh_workers_all_key(self._intercom)
+        return _get_workers_count(self._intercom)
+
+    def get_workers_starting(self):
+        if hasattr(self._intercom, 'get_workers_starting'):
+            return self._intercom.get_workers_starting()
+        return _get_workers_count(self._intercom, started=True, busy=False)
 
     def get_queue_length(self):
         if self._watched is None:
@@ -50,26 +55,12 @@ class Watchdog(object):
     # Actions:
     #
 
-    def _inform_worker_new(self, worker_id: str):
+    def _inform_worker_new(self, worker_id:str):
         """
         Inform the central state in self._intercom that a new worker joined.
         Sets the expiration of the state.
         """
-        if isinstance(self._intercom, MuteIntercom):
-            return None
-
-        metadata = {
-            'id': worker_id,
-            'time_join': datetime.now(timezone.utc),
-        }
-        worker_key = _get_workers_key_prefix(prefix=self._name) + worker_id
-
-        with self._intercom.pipeline() as pipe:
-            pipe.hmset(worker_key, metadata)
-            pipe.expire(worker_key, DEFAULT_WORKER_EXPIRE)
-            result, _ = pipe.execute()
-
-        return (worker_key, metadata) if result else result
+        return inform_worker_new(self._intercom, worker_id, prefix=self._name)
 
     def _trigger_worker(self) -> tuple:
         """
@@ -82,7 +73,8 @@ class Watchdog(object):
         _, worker_data = self._inform_worker_new(worker_uuid)
         invocation_result = invoke_worker(data={
             'worker_id': worker_data['id'],
-            'worker_trigger_time': datetime.now(),
+            'worker_trigger_time': worker_data['time_join'],
+            'prefix': self._name,
         })
         return invocation_result + (worker_data, )
 
@@ -90,19 +82,20 @@ class Watchdog(object):
         if not how_many:
             return 0
         logger.info('Starting %s workers', how_many)
-        success_calls = 0
+
         invocations = []
         for i in range(how_many):
-            triggered, future, worker_id = self._trigger_worker()
-            invocations.append(future)
+            triggered, future, worker_data = self._trigger_worker()
+            if triggered:
+                invocations.append(future)
 
+        success_calls = 0
         for future in as_completed(invocations):
             try:
                 future.result()
                 success_calls += 1
             except Exception as err:
                 logger.error('Invocation failed', exc_info=1)
-
         return success_calls
 
     def monitor(self):
@@ -123,8 +116,8 @@ class Watchdog(object):
             # 2b) Start (N-existing) workers
             available_workers = self.pool_size - existing_workers
             available_workers = max(available_workers, 0)
-            warming_workers = existing_workers - self.working_workers
-            needed_workers = queue_length - warming_workers
+
+            needed_workers = queue_length - self.get_workers_starting()
             desired_new_workers = min(needed_workers, available_workers)
 
             self.trigger_workers(desired_new_workers)
@@ -187,23 +180,104 @@ def build_intercom(intercom):
         raise NotImplementedError()
 
 
-def inform_worker_leave(redis:'StrictRedis', worker_key:str):
-    if isinstance(redis, MuteIntercom):
-        return None
-    return redis.delete(worker_key)  # TODO: Use "UNLINK" instead of "DEL"
-
-
-def _get_workers_all_key(prefix=DEFAULT_BASENAME):
-    return '%s:workers:all' % prefix
-
-
-def _get_workers_key_prefix(prefix=DEFAULT_BASENAME):
-    return '%s:workers:' % prefix
-
-
-def refresh_workers_all_key(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=None, minutes=5):
+def inform_worker_new(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAME):
+    """
+    Inform the central state in self._intercom that a new worker joined.
+    Sets the expiration of the state.
+    """
     if isinstance(redis, MuteIntercom):
         return None
 
-    workers_all_glob = _get_workers_key_prefix(prefix=prefix) + '?*'
-    return len(redis.keys(workers_all_glob))
+    worker_prefix = _get_worker_key_prefix(prefix=prefix)
+    worker_key = worker_prefix + worker_id
+    workers_started_key = _get_workers_started_key(prefix=prefix)
+
+    metadata = {
+        'id': worker_id,
+        'key': worker_key,
+        'time_join': datetime.now(timezone.utc).timestamp(),  # secs from epoch
+    }
+
+    with redis.pipeline() as pipe:
+        pipe.hmset(worker_key, metadata)
+        pipe.expire(worker_key, DEFAULT_WORKER_EXPIRE)
+
+        pipe.zadd(workers_started_key, **{worker_key: metadata['time_join']})
+        pipe.expire(workers_started_key, DEFAULT_WORKER_EXPIRE)  # Renew expire limit
+        result, *_ = pipe.execute()
+
+    return (worker_key, metadata) if result else result
+
+
+def inform_worker_busy(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAME):
+    if isinstance(redis, MuteIntercom):
+        return None
+
+    workers_started_key = _get_workers_started_key(prefix=prefix)
+    workers_busy_key = _get_workers_busy_key(prefix=prefix)
+    worker_prefix = _get_worker_key_prefix(prefix=prefix)
+    worker_key = worker_prefix + worker_id
+    epoch_now = datetime.now(timezone.utc).timestamp()  # secs from epoch
+
+    with redis.pipeline() as pipe:
+        pipe.zadd(workers_busy_key, **{worker_key: epoch_now})
+        pipe.zrem(workers_started_key, worker_key)
+
+        # Renew expire limits
+        pipe.expire(worker_key, DEFAULT_WORKER_EXPIRE)
+        pipe.expire(workers_busy_key, DEFAULT_WORKER_EXPIRE)
+        pipe.expire(workers_started_key, DEFAULT_WORKER_EXPIRE)
+        result, *_ = pipe.execute()
+    return result
+
+
+def inform_worker_leave(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAME):
+    if isinstance(redis, MuteIntercom):
+        return None
+
+    workers_started_key = _get_workers_started_key(prefix=prefix)
+    workers_busy_key = _get_workers_busy_key(prefix=prefix)
+    worker_prefix = _get_worker_key_prefix(prefix=prefix)
+    worker_key = worker_prefix + worker_id
+
+    with redis.pipeline() as pipe:
+        pipe.delete(worker_key)  # TODO: Use "UNLINK" instead of "DEL"
+        pipe.zrem(workers_started_key, worker_key)
+        pipe.zrem(workers_busy_key, worker_key)
+        _, *deleted = pipe.execute()
+    return len(deleted)
+
+
+def _get_worker_key_prefix(prefix=DEFAULT_BASENAME):
+    return '%s:worker:' % prefix
+
+
+def _get_workers_started_key(prefix=DEFAULT_BASENAME):
+    return '%s:workers:started' % prefix
+
+
+def _get_workers_busy_key(prefix=DEFAULT_BASENAME):
+    return '%s:workers:busy' % prefix
+
+
+def _get_workers_count(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=None, minutes=5, started=True, busy=True):
+    assert started or busy, 'What are you counting if not started nor busy ones?'
+
+    if isinstance(redis, MuteIntercom):
+        return None
+
+    now = now or datetime.now(timezone.utc)
+    start = int((now - timedelta(minutes=minutes)).timestamp())
+    end = float('+inf')  # To infinite and beyond
+
+    workers_started_key = _get_workers_started_key(prefix=prefix)
+    workers_busy_key = _get_workers_busy_key(prefix=prefix)
+
+    with redis.pipeline() as pipe:
+        if started:
+            pipe.zcount(workers_started_key, start, end)
+        if busy:
+            pipe.zcount(workers_busy_key, start, end)
+        count = sum(pipe.execute())
+
+    return count

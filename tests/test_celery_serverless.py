@@ -9,6 +9,7 @@ import logging
 import pytest
 from pytest_shutil import env
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
 from click.testing import CliRunner
 
@@ -78,12 +79,22 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
         """
         Simulates a Worker invocation cycle via Redis keys changes
         """
+        ## Expects kwargs{} maybe containing:
+        # 'data': {
+        #     'worker_id': '2a3dc6a4-78a7-11e8-86e7-4c32758cbd8b',
+        #     'worker_trigger_time': 1529951999.836363,
+        #     'prefix': 'celery_serverless:watchdog:worker:',
+        # }
+        ##
         logger.warning('Simulating an Worker invocation: START')
+
+        watchdog_data = kwargs.get('data', {})
+        worker_id = watchdog_data.get('worker_id', str(uuid.uuid1()))
+        worker_prefix = watchdog_data.get('prefix', None)
 
         # Worker takes some time to init, then notify the Cache
         time.sleep(2)
         # celeryd_init hook happens at this point
-        worker_uuid = str(uuid.uuid1())
 
         # Worker connecting to the broker
         time.sleep(2)
@@ -93,22 +104,22 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
         conn.rpop(queue_name)  # Simulate task removal from the queue.
 
         # task_prerun hook happens at this point
-        watchdog.inform_worker_working(conn, worker_uuid)
+        watchdog.inform_worker_busy(conn, worker_id, prefix=worker_prefix)  # Moves itself from "started" to "working".
 
         # Worker got a job. Started working
         time.sleep(2)
         # Worker finished the job.
 
         # task_postrun hook happens at this point
-        watchdog.inform_worker_leave(conn, worker_uuid)  # Unsubscribe itself from the "working" list.
+        watchdog.inform_worker_leave(conn, worker_id, prefix=worker_prefix)  # Unsubscribe itself from "working" list.
         logger.warning('Simulating an Worker invocation: END')
 
     conn.flushdb()
-    assert watchdog.refresh_workers_all_key(conn) == 0, 'The redis is not starting empty'
+    assert watchdog._get_workers_count(conn) == 0, 'The redis is not starting empty'
 
     _simulate_worker_invocation()   # Just be sure that it works.
 
-    assert watchdog.refresh_workers_all_key(conn) == 0, 'Worker simulation is not informing its finish.'
+    assert watchdog._get_workers_count(conn) == 0, 'Worker simulation is not informing its finish.'
 
     jobs = ['one', 'two', 'three']
     with conn.pipeline() as pipe:
@@ -137,4 +148,4 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
     assert conn.llen(queue_name) == 0, 'Watchdog finished but the queue is not empty'
 
     # Should I really test for this?
-    assert watchdog.refresh_workers_all_key(conn) == 0, 'Watchdog finished but not the workers'
+    assert watchdog._get_workers_count(conn) == 0, 'Watchdog finished but not the workers'
