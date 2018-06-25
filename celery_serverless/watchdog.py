@@ -4,7 +4,6 @@ import uuid
 import logging
 import threading
 from functools import partial
-from concurrent.futures import as_completed
 from itertools import count
 from datetime import datetime, timezone, timedelta
 
@@ -71,12 +70,12 @@ class Watchdog(object):
         """
         worker_uuid = str(uuid.uuid1())
         _, worker_data = self._inform_worker_new(worker_uuid)
-        invocation_result = invoke_worker(data={
+        success, future = invoke_worker(data={
             'worker_id': worker_data['id'],
             'worker_trigger_time': worker_data['time_join'],
             'prefix': self._name,
         })
-        return invocation_result + (worker_data, )
+        return success, future, worker_data
 
     def trigger_workers(self, how_many:int):
         if not how_many:
