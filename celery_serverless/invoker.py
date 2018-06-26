@@ -143,7 +143,7 @@ class Invoker(object):
             raise error
         return output, None
 
-    def _invoke_boto3(self, stage='', sync=False, executor='asyncio', extra_data=None):
+    def _invoke_boto3(self, stage='', sync=False, executor='threading', extra_data=None):
         extra_data = extra_data or {}
         stage = stage or self._get_stage()
         function_name = '%s-%s-%s' % (self.config['service'], stage,
