@@ -134,7 +134,9 @@ class Watchdog(object):
             needed_workers = queue_length - self.get_workers_starting()
             desired_new_workers = min(needed_workers, available_workers)
 
-            self.trigger_workers(desired_new_workers)
+            if desired_new_workers > 0:
+                success_calls = self.trigger_workers(desired_new_workers)
+                logger.info('Invoked %s of %s tried', desired_new_workers, success_calls)
 
         return self.joined_event_count  # How many had to be started to fulfill the queue?
 
