@@ -5,6 +5,8 @@ import logging
 import threading
 from functools import partial
 from itertools import count
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from asyncio import Future as AsyncioFuture, InvalidStateError
 from datetime import datetime, timezone, timedelta
 
 import backoff
@@ -82,13 +84,33 @@ class Watchdog(object):
             return 0
         logger.info('Starting %s workers', how_many)
 
+        success_calls = 0
         invocations = []
         for i in range(how_many):
             triggered, future, worker_data = self._trigger_worker()
-            if triggered:
-                invocations.append(future)
+            if not triggered:
+                continue
 
-        return len(invocations)  # success_calls
+            invocations.append(future)
+
+            if isinstance(future, AsyncioFuture):
+                _check_params = dict()
+            else:
+                _check_params = dict(timeout=0)
+
+            try:
+                future.exception(**_check_params)
+            except InvalidStateError:   # asyncio.Future
+                pass
+            except FuturesTimeoutError:    # concurrent.futures.Future
+                pass
+            except Exception as err:
+                logger.error('Could not trigger worker: [%s] %s', type(err), err, exc_info=True)
+
+            if triggered:
+                success_calls += 1
+
+        return success_calls
 
     def monitor(self):
         for loops in count(1):  # while True
