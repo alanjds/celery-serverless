@@ -195,6 +195,13 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url='', worker_meta
         worker.consumer.connection._default_channel.do_restore = True
         assert not worker.__task_finished, 'Should had shutdown on task_success. Not here!'
 
+        watchdog_context = context['worker_watchdog']
+        watchdog.inform_worker_busy(
+            watchdog_context['intercom'],
+            watchdog_context['worker_id'],
+            prefix=watchdog_context['prefix'],
+        )
+
     @task_success.connect
     def _ack_success(sender=None, *args, **kwargs):
         task = sender
