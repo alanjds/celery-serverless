@@ -20,7 +20,7 @@ logger.setLevel('DEBUG')
 
 DEFAULT_BASENAME = 'celery_serverless:watchdog'
 DEFAULT_WORKER_EXPIRE = 6 * 60  # 6 minutes
-UNCONFIRMED_LIMIT = {'seconds': 30}
+DEFAULT_STARTED_TIMEOUT = 30 # half minute
 
 
 class Watchdog(object):
@@ -280,23 +280,29 @@ def _get_workers_busy_key(prefix=DEFAULT_BASENAME):
     return '%s:workers:busy' % prefix
 
 
-def _get_workers_count(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=None, minutes=5, started=True, busy=True):
+def _get_workers_count(redis:'StrictRedis', prefix=DEFAULT_BASENAME, now=None,
+                       started=True, started_duration=None,
+                       busy=True, busy_duration=None):
     assert started or busy, 'What are you counting if not started nor busy ones?'
+    started_duration = started_duration or {'seconds': 30}
+    busy_duration = busy_duration or {'seconds': DEFAULT_WORKER_EXPIRE}
 
     if isinstance(redis, MuteIntercom):
         return None
 
     now = now or datetime.now(timezone.utc)
-    start = int((now - timedelta(minutes=minutes)).timestamp())
-    end = float('+inf')  # To infinite and beyond
 
     workers_started_key = _get_workers_started_key(prefix=prefix)
     workers_busy_key = _get_workers_busy_key(prefix=prefix)
 
     with redis.pipeline() as pipe:
         if started:
+            start = int((now - timedelta(**started_duration)).timestamp())
+            end = float('+inf')  # To infinite and beyond
             pipe.zcount(workers_started_key, start, end)
         if busy:
+            start = int((now - timedelta(**busy_duration)).timestamp())
+            end = float('+inf')  # To infinite and beyond
             pipe.zcount(workers_busy_key, start, end)
         count = sum(pipe.execute())
 
