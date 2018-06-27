@@ -2,7 +2,7 @@
 import time
 import uuid
 import logging
-import threading
+import dummy_threading
 from functools import partial
 from itertools import count
 from concurrent.futures import TimeoutError as FuturesTimeoutError
@@ -27,7 +27,7 @@ class Watchdog(object):
     def __init__(self, communicator=None, name='', lock=None, watched=None):
         self._intercom = communicator
         self._name = name or DEFAULT_BASENAME
-        self._lock = lock or threading.Lock()
+        self._lock = lock or dummy_threading.Lock()
         self._watched = watched
         self.pool_size = 200
 
@@ -104,30 +104,38 @@ class Watchdog(object):
         return success_calls
 
     def monitor(self):
-        for loops in count(1):  # while True
-            logger.debug('Monitor loop started! [%s]', loops)
+        locked = self._lock.acquire()
+        if not locked:
+            logger.info('Could not get the lock. Giving up.')
+            return 0
 
-            # 1) See queue length N
-            queue_length = self.get_queue_length()
+        try:
+            for loops in count(1):  # while True
+                logger.debug('Monitor loop started! [%s]', loops)
 
-            # 2a) Stop if empty queue and no running worker left
-            existing_workers = self.get_workers_count()
-            if not queue_length and not existing_workers:
-                logger.debug('Empty queue and no worker running. Stop monitoring')
-                break
+                # 1) See queue length N
+                queue_length = self.get_queue_length()
 
-            logger.debug('We have %s enqueued tasks and %s workers running', queue_length, existing_workers)
+                # 2a) Stop if empty queue and no running worker left
+                existing_workers = self.get_workers_count()
+                if not queue_length and not existing_workers:
+                    logger.debug('Empty queue and no worker running. Stop monitoring')
+                    break
 
-            # 2b) Start (N-existing) workers
-            available_workers = self.pool_size - existing_workers
-            available_workers = max(available_workers, 0)
+                logger.debug('We have %s enqueued tasks and %s workers running', queue_length, existing_workers)
 
-            needed_workers = queue_length - self.get_workers_starting()
-            desired_new_workers = min(needed_workers, available_workers)
+                # 2b) Start (N-existing) workers
+                available_workers = self.pool_size - existing_workers
+                available_workers = max(available_workers, 0)
 
-            if desired_new_workers > 0:
-                success_calls = self.trigger_workers(desired_new_workers)
-                logger.info('Invoked %s of %s tried', desired_new_workers, success_calls)
+                needed_workers = queue_length - self.get_workers_starting()
+                desired_new_workers = min(needed_workers, available_workers)
+
+                if desired_new_workers > 0:
+                    success_calls = self.trigger_workers(desired_new_workers)
+                    logger.info('Invoked %s of %s tried', desired_new_workers, success_calls)
+        finally:
+            self._lock.release()
 
         return self.joined_event_count  # How many had to be started to fulfill the queue?
 
