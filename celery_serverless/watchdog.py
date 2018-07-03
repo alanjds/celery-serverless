@@ -204,7 +204,7 @@ def inform_worker_new(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAM
         return None
 
     worker_prefix = _get_worker_key_prefix(prefix=prefix)
-    worker_key = worker_prefix + worker_id
+    worker_key = worker_prefix + str(worker_id)
     workers_started_key = _get_workers_started_key(prefix=prefix)
 
     metadata = {
@@ -232,7 +232,7 @@ def inform_worker_busy(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENA
     workers_started_key = _get_workers_started_key(prefix=prefix)
     workers_busy_key = _get_workers_busy_key(prefix=prefix)
     worker_prefix = _get_worker_key_prefix(prefix=prefix)
-    worker_key = worker_prefix + worker_id
+    worker_key = worker_prefix + str(worker_id)
     epoch_now = datetime.now(timezone.utc).timestamp()  # secs from epoch
 
     with redis.pipeline() as pipe:
@@ -256,7 +256,7 @@ def inform_worker_leave(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASEN
     workers_started_key = _get_workers_started_key(prefix=prefix)
     workers_busy_key = _get_workers_busy_key(prefix=prefix)
     worker_prefix = _get_worker_key_prefix(prefix=prefix)
-    worker_key = worker_prefix + worker_id
+    worker_key = worker_prefix + str(worker_id)
 
     with redis.pipeline() as pipe:
         pipe.delete(worker_key)  # TODO: Use "UNLINK" instead of "DEL"
