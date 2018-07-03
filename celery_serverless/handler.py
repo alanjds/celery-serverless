@@ -5,6 +5,7 @@ except ImportError:
     pass
 
 import os
+import time
 import json
 import logging
 
@@ -98,7 +99,17 @@ def watchdog(event, context):
             watchdog.monitor()
             fulfilled = True
     except TimeoutError:
-        logger.info('Still stuff to monitor but this Function is out of time. Reinvoking the Watchdog!')
+        logger.warning('Still stuff to monitor but this Function is out of time. Preparing to reinvoke the Watchdog')
+
+        # Be sure that the lock is released. Then reinvoke.
+        try:
+            lock.release()
+        except (RuntimeError, AttributeError):
+            pass
+        else:
+            time.sleep(1)  # Let distributed locks to propagate
+
+        logger.info('All set. Reinvoking the Watchdog')
         invoke_watchdog()
 
     logger.debug('Cleaning up before exit')
