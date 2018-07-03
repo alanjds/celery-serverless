@@ -13,7 +13,7 @@ import backoff
 from redis import StrictRedis
 from kombu import Connection
 from kombu.transport import pyamqp
-from celery_serverless.invoker import invoke_worker
+from celery_serverless.invoker import invoke_worker, invoke_watchdog
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
