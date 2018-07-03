@@ -110,7 +110,9 @@ def watchdog(event, context):
             time.sleep(1)  # Let distributed locks to propagate
 
         logger.info('All set. Reinvoking the Watchdog')
-        invoke_watchdog()
+        _, future = invoke_watchdog()
+        future.result()
+        logger.info('Done reinvoking another Watchdog')
 
     logger.debug('Cleaning up before exit')
     body = {
