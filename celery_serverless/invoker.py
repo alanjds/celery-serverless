@@ -32,23 +32,25 @@ except ImportError:  # Boto3 is an optional extra on setup.py
 from .cli_utils import run
 from .utils import run_aio_on_thread
 
-CELERY_HANDLER_PATH = 'celery_serverless.handler_worker'
+CELERY_HANDLER_PATHS = {
+    'worker': 'celery_serverless.handler_worker',
+    'watchdog': 'celery_serverless.handler_watchdog',
+}
 
 
-def _get_serverless_name(config):
+def _get_serverless_name(config, target):
     for name, options in config['functions'].items():
-        if options.get('handler') == CELERY_HANDLER_PATH:
+        if options.get('handler') == CELERY_HANDLER_PATHS[target]:
             return name
 
     raise RuntimeError((
         "Handler '%s' not found on serverless.yml.\n"
         "Please fix it or run 'celery serverless init' to recreate one"
-    ) % CELERY_HANDLER_PATH)
+    ) % CELERY_HANDLER_PATHS[target])
 
 
 @functools.lru_cache(8)
 def _get_awslambda_arn(function_name):
-    import ipdb; ipdb.set_trace()
     def _functions():
         for page in lambda_client.get_paginator('list_functions').paginate():
             for f in page.get('Functions', []):
@@ -62,10 +64,13 @@ def _get_awslambda_arn(function_name):
 
 
 class Invoker(object):
-    def __init__(self, config=None):
+    def __init__(self, target='worker', config=None):
+        self.target = target
         self.config = config or get_config()
 
-    def invoke_main(self, strategy='', stage=''):
+    def invoke_main(self, strategy='', stage='', extra_data=None):
+        extra_data = extra_data or {}
+
         if not strategy:
             strategy = self._infer_strategy()
 
@@ -81,7 +86,7 @@ class Invoker(object):
             stage = self._get_stage()
 
         try:
-            logs, future = invoker(stage=stage)  # Should raise exception on some problem
+            logs, future = invoker(stage=stage, extra_data=extra_data)  # Should raise exception on some problem
         except RuntimeError as err:
             logger.warning('Invocation failed via "%s": %s', strategy, getattr(err, 'details', ''))
             return False, err
@@ -106,7 +111,7 @@ class Invoker(object):
         return 'serverless'
 
     def _invoke_serverless(self, stage='', local=False):
-        name = _get_serverless_name(self.config)
+        name = _get_serverless_name(self.config, self.target)
         command = 'serverless invoke'
         if local:
             command += ' local'
@@ -138,10 +143,11 @@ class Invoker(object):
             raise error
         return output, None
 
-    def _invoke_boto3(self, stage='', sync=False, executor='asyncio'):
+    def _invoke_boto3(self, stage='', sync=False, executor='asyncio', extra_data=None):
+        extra_data = extra_data or {}
         stage = stage or self._get_stage()
         function_name = '%s-%s-%s' % (self.config['service'], stage,
-                                      _get_serverless_name(self.config))
+                                      _get_serverless_name(self.config, self.target))
         lambda_arn = _get_awslambda_arn(function_name)
         assert lambda_arn, 'An exeception should had raised on _get_awslambda_arn call.'
         logger.debug("Invoking via 'boto3' %s %s", 'sync' if sync else 'async', executor)
@@ -154,6 +160,11 @@ class Invoker(object):
             #Payload=b'bytes'|file,
             #Qualifier='$LATEST',  # 'string'
         )
+
+        if extra_data:
+            invoke_options.update(dict(
+                Payload=json.dumps(extra_data).encode()
+            ))
 
         if sync:
             invoke_options.update(dict(
@@ -202,5 +213,9 @@ class Invoker(object):
         return output, future
 
 
-def invoke(config=None, *args, **kwargs):
-    return Invoker(config=config).invoke_main(*args, **kwargs)
+def invoke(target='watchdog', config=None, *args, **kwargs):
+    return Invoker(target=target, config=config).invoke_main(*args, **kwargs)
+
+
+def invoke_worker(config=None, data=None, *args, **kwargs):
+    return invoke(target='worker', extra_data=data or {}, *args, **kwargs)

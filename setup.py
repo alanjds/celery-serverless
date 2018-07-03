@@ -11,10 +11,12 @@ with open('README.rst') as readme_file:
 
 requirements = [
     'Click>=6.0',
-    'celery~=4.1.0',
+    'celery~=4.2.0',
     'ruamel.yaml~=0.15.37',
     'dirtyjson==1.0.7',
     'future-thread~=1.0',
+    'backoff>=1.5.0',
+    'redlock>=1.2.0',
 ]
 
 setup_requirements = []
@@ -51,7 +53,7 @@ setup(
     extras_require={
         'boto3': [
             'boto3>=1.7.0',
-            'aioboto3>=3.0.0',
+            'aioboto3>=4.0.1',
         ],
         'wdb': [
             'wdb>=3.2.1',

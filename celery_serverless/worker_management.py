@@ -1,14 +1,16 @@
 # coding: utf-8
 import os
+import uuid
 import signal
 import logging
-from functools import partial
 
 import celery.bin.celery
 import celery.worker.state
 import celery.worker.request
 from celery.signals import celeryd_init, worker_ready, task_prerun, task_postrun, task_success
 from celery.exceptions import WorkerShutdown
+
+from celery_serverless import watchdog
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
@@ -82,6 +84,8 @@ def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args,
     """
     Sets an alarm via Unix SIGALRM up to 'seconds' ahead.
     Then calls the 'callback'.
+    Only ONE alarm can exist at a time. If this function is called multiple times, only the
+    last call remains active.
     """
     if reason:
         reason = 'waiting for "%s"' % reason
@@ -96,7 +100,18 @@ def cancel_wakeme():
     signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
 
 
-def attach_hooks(wait_connection=8.0, wait_job=4.0):
+def _shutdown_worker(context):
+    # Inform the Watchdog Monitor [leave]
+    watchdog_context = context['worker_watchdog']
+    watchdog.inform_worker_leave(
+        watchdog_context['intercom'],
+        watchdog_context['worker_id'],
+        prefix=watchdog_context['prefix'],
+    )
+    raise WorkerShutdown()
+
+
+def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url='', worker_metadata=None):
     """
     Register the needed hooks:
     - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
@@ -110,6 +125,20 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
 
+    intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+    worker_metadata = worker_metadata or {
+        'worker_id': uuid.uuid1(),
+        'prefix': '(undefined)',
+    }
+    assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+
+    context['worker_watchdog'] = {
+        'intercom': watchdog.build_intercom(intercom_url),
+        'worker_metadata': worker_metadata,
+        'worker_id': worker_metadata['worker_id'],
+        'prefix': worker_metadata['prefix'],
+    }
+
     @celeryd_init.connect  # After worker process up
     def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
         logger.debug('Connecting to the broker [celeryd_init]')
@@ -119,8 +148,10 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
         def _maybe_shutdown(*args, **kwargs):
             assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
             logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
-            raise WorkerShutdown()
-        return wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
+            _shutdown_worker(context)
+
+        # Set shutdown signal in case we don't connect in wait_connection seconds
+        wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
 
     # #######
     # @worker_init.connect  # Before connecting, if -P solo
@@ -146,8 +177,10 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
                 logger.debug('Keep going. Task received [callback:worker_ready]')
             else:
                 logger.info('Shutting down. Never received a Task [callback:worker_ready]')
-                raise WorkerShutdown()
-        return wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
+                _shutdown_worker(context)
+        # only one alarm SIGALRM is allowed to exist at a time
+        # this cancels any previous alarms and set a new one
+        wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
 
     @task_prerun.connect  # Task already got.
     def _unset_watchdogs(*args, **kwargs):
@@ -161,6 +194,13 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
         # New task should be rejected and returned if one was already processed.
         worker.consumer.connection._default_channel.do_restore = True
         assert not worker.__task_finished, 'Should had shutdown on task_success. Not here!'
+
+        watchdog_context = context['worker_watchdog']
+        watchdog.inform_worker_busy(
+            watchdog_context['intercom'],
+            watchdog_context['worker_id'],
+            prefix=watchdog_context['prefix'],
+        )
 
     @task_success.connect
     def _ack_success(sender=None, *args, **kwargs):
@@ -184,7 +224,7 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
         # See: https://gist.github.com/lovemyliwu/af5112de25b594205a76c3bfd00b9340
         worker.consumer.connection._default_channel.do_restore = False
 
-        raise WorkerShutdown()
+        _shutdown_worker(context)
 
     # Using weak references. Is up to the caller to store the callbacks produced
     return [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _demand_shutdown]

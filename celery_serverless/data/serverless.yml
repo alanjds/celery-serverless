@@ -24,6 +24,12 @@ functions:
     environment:
       CELERY_WORKER_APP: 'project'
 
+  celery_serverless_watchdog:
+    handler: celery_serverless.handler_watchdog
+    runtime: python3.6
+    timeout: 300  # Up to 300
+
+
 custom:
   pythonRequirements:
     zip: false

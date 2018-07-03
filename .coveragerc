@@ -1,0 +1,16 @@
+[run]
+branch = True
+parallel = True
+disable_warnings = no-data-collected
+include =
+    ./*
+omit =
+    venv/*
+    */tests*
+    .git
+    .tox/*
+    conf/*
+    */__pycache__/*
+
+[report]
+#skip_covered = True

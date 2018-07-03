@@ -66,7 +66,6 @@ def _warmup_hooks(locals_={}):
 
     ### 2nd hook call
     _maybe_call_hook(ENVVAR_NAMES['pre_handler_definition'], locals_)
-    return locals_
 
 
 def _post_handler_definition_hook(locals_={}):
@@ -79,7 +78,7 @@ def _post_handler_definition_hook(locals_={}):
 
 def handler_wrapper(fn):
     ### 1st and 2nd hook calls
-    available_extras = _warmup_hooks(locals_=locals())['available_extras']
+    _warmup_hooks(locals_=globals())  # Do sets 'available_extras' global
 
     @functools.wraps(fn)
     @maybe_apply_sentry(available_extras)
@@ -121,6 +120,6 @@ def handler_wrapper(fn):
                 available_extras['wdb']['stop_trace']()
 
     ### 3rd hook call
-    _post_handler_definition_hook(locals_=locals())
+    _post_handler_definition_hook(locals_=globals())
 
     return _handler
