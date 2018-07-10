@@ -17,7 +17,7 @@ def trigger_invoke(task=None, *args, **kwargs):
         logging.warning("Serverless worker will probable not get the task,"
                         " as its queue %s is probable not being listened there",
                         kwargs['queue'])
-    return invoker.invoke_watchdog()
+    return invoker.client_invoke_watchdog()
 
 
 class TriggerServerlessBeforeMixin(object):
