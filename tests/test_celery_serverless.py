@@ -58,6 +58,7 @@ def test_watchdog_needs_envvar(envname):
     else:
         raise RuntimeError('Had not raised an AssertionError')
 
+
 @pytest.mark.timeout(30)
 def test_watchdog_monitor_redis_queues(monkeypatch):
     queue_url = 'redis://'
