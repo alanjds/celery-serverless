@@ -30,6 +30,21 @@ try:
 except ImportError:  # Boto3 is an optional extra on setup.py
     lambda_client = None
 
+try:
+    from redis import StrictRedis
+
+    # MONKEYPATCH until https://github.com/andymccurdy/redis-py/pull/1007/ is merged
+    import redis.lock
+    def __locked(self):
+        if self.redis.get(self.name) is not None:
+            return True
+        return False
+    if not hasattr(redis.lock.Lock, 'locked'):
+        redis.lock.Lock.locked = __locked
+except ImportError:
+    pass
+
+
 from .cli_utils import run
 from .utils import run_aio_on_thread
 
