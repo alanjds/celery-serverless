@@ -249,3 +249,43 @@ def invoke_watchdog(config=None, data=None, check_lock=True, *args, **kwargs):
             logger.info('Watchdog lock already held. Giving up.')
             return False, RuntimeError('Watchdog lock already held')
     return invoke(target='watchdog', extra_data=data or {}, *args, **kwargs)
+
+
+def client_invoke_watchdog(check_lock=True, *args, **kwargs):
+    if not check_lock:
+        return invoke_watchdog(check_lock=True, *args, **kwargs)
+
+    client_lock = _get_client_lock()[0]
+    locked = client_lock.acquire()
+    if not locked:
+        logger.info('Could not get Client lock. Giving up.')
+        return False, RuntimeError('Client lock already held')
+
+    try:
+        return invoke_watchdog(with_lock=True, *args, **kwargs)
+    finally:
+        client_lock.release()
+
+
+def _get_client_lock(lock_url='', lock_name='', default=multiprocessing.Lock, enforce=False):
+    if _CLIENT_LOCK and lock_name == _CLIENT_LOCK['lock_name']:
+        return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
+
+    lock_name = lock_name or os.environ.get('CELERY_SERVERLESS_CLIENT_LOCK_NAME', 'celery_serverless:watchdog-client')
+    lock_url = lock_url or os.environ.get('CELERY_SERVERLESS_LOCK_URL', '(unavailable)')
+    if enforce:
+        if lock_url == 'disabled':
+            lock_url = ''
+        else:
+            assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
+
+    if default and not lock_url:
+        lock = default()
+    elif lock_url.startswith(('redis://', 'rediss://')):
+        redis = StrictRedis.from_url(lock_url)
+        lock = redis.lock(lock_name + '-client')
+    else:
+        raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
+
+    _CLIENT_LOCK.update({'lock': lock, 'lock_name': lock_name})
+    return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
