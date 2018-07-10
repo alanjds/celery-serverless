@@ -19,7 +19,8 @@ print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 from redis import StrictRedis
 from timeoutcontext import timeout as timeout_context
-from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, invoke_watchdog, _get_watchdog_lock
+from celery_serverless.invoker import invoke_watchdog
+from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, _get_watchdog_lock
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
@@ -101,7 +102,7 @@ def watchdog(event, context):
             time.sleep(1)  # Let distributed locks to propagate
 
         logger.info('All set. Reinvoking the Watchdog')
-        _, future = invoke_watchdog()
+        _, future = invoke_watchdog(check_lock=False)
         future.result()
         logger.info('Done reinvoking another Watchdog')
 

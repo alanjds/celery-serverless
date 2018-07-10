@@ -14,7 +14,7 @@ import backoff
 from redis import StrictRedis
 from kombu import Connection
 from kombu.transport import pyamqp
-from celery_serverless.invoker import invoke_worker, invoke_watchdog
+from celery_serverless.invoker import invoke_worker
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
@@ -24,9 +24,9 @@ DEFAULT_WORKER_EXPIRE = 6 * 60  # 6 minutes
 DEFAULT_STARTED_TIMEOUT = 30 # half minute
 
 
-def _get_watchdog_lock(lock_url='', lock_name='', default=dummy_threading.Lock, enforce=True):
+def _get_watchdog_lock(lock_url='', lock_name='', default=dummy_threading.Lock, enforce=True) -> '(Lock, str)':
     lock_name = lock_name or os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless:watchdog')
-    lock_url = lock_url or os.environ.get('CELERY_SERVERLESS_LOCK_URL', '(unavailable)')
+    lock_url = lock_url or os.environ.get('CELERY_SERVERLESS_LOCK_URL', '')
     if enforce:
         if lock_url == 'disabled':
             lock_url = ''
@@ -40,7 +40,6 @@ def _get_watchdog_lock(lock_url='', lock_name='', default=dummy_threading.Lock, 
         lock = default()
     else:
         raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
-
     return lock, lock_name
 
 
@@ -125,7 +124,7 @@ class Watchdog(object):
         return success_calls
 
     def monitor(self):
-        locked = self._lock.acquire()
+        locked = self._lock.acquire(False)
         if not locked:
             logger.info('Could not get the lock. Giving up.')
             return 0
