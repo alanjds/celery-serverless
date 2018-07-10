@@ -1,4 +1,5 @@
 # coding: utf-8
+import os
 import time
 import uuid
 import logging
@@ -21,6 +22,26 @@ logger.setLevel('DEBUG')
 DEFAULT_BASENAME = 'celery_serverless:watchdog'
 DEFAULT_WORKER_EXPIRE = 6 * 60  # 6 minutes
 DEFAULT_STARTED_TIMEOUT = 30 # half minute
+
+
+def _get_watchdog_lock(lock_url='', lock_name='', default=dummy_threading.Lock, enforce=True):
+    lock_name = lock_name or os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless:watchdog')
+    lock_url = lock_url or os.environ.get('CELERY_SERVERLESS_LOCK_URL', '(unavailable)')
+    if enforce:
+        if lock_url == 'disabled':
+            lock_url = ''
+        else:
+            assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
+
+    if lock_url.startswith(('redis://', 'rediss://')):
+        redis = StrictRedis.from_url(lock_url)
+        lock = redis.lock(lock_name)
+    elif default and not lock_url:
+        lock = default()
+    else:
+        raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
+
+    return lock, lock_name
 
 
 class Watchdog(object):

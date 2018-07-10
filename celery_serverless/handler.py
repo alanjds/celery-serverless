@@ -19,7 +19,7 @@ print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 from redis import StrictRedis
 from timeoutcontext import timeout as timeout_context
-from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, invoke_watchdog
+from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, invoke_watchdog, _get_watchdog_lock
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
@@ -62,23 +62,13 @@ def worker(event, context, intercom_url=None):
 
 @handler_wrapper
 def watchdog(event, context):
-    lock_name = os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless:watchdog')
-    lock_url = os.environ.get('CELERY_SERVERLESS_LOCK_URL')
-    assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
-
     queue_url = os.environ.get('CELERY_SERVERLESS_QUEUE_URL')
     assert queue_url, 'The CELERY_SERVERLESS_QUEUE_URL envvar should be set. Even to "disabled" to disable it.'
 
     intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
     assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
 
-    if lock_url == 'disabled':
-        lock = None
-    elif lock_url.startswith(('redis://', 'rediss://')):
-        redis = StrictRedis.from_url(lock_url)
-        lock = redis.lock(lock_name)
-    else:
-        raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
+    lock, lock_name = _get_watchdog_lock(enforce=True)
 
     if queue_url == 'disabled':
         watched = None
