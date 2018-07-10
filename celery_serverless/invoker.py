@@ -6,6 +6,7 @@ import functools
 import logging
 import codecs
 import json
+import multiprocessing
 from pprint import pformat
 
 import dirtyjson
@@ -31,6 +32,9 @@ except ImportError:  # Boto3 is an optional extra on setup.py
 
 from .cli_utils import run
 from .utils import run_aio_on_thread
+
+
+_CLIENT_LOCK = {}
 
 CELERY_HANDLER_PATHS = {
     'worker': 'celery_serverless.handler_worker',
@@ -221,5 +225,12 @@ def invoke_worker(config=None, data=None, *args, **kwargs):
     return invoke(target='worker', extra_data=data or {}, *args, **kwargs)
 
 
-def invoke_watchdog(config=None, data=None, *args, **kwargs):
+def invoke_watchdog(config=None, data=None, check_lock=True, *args, **kwargs):
+    from .watchdog import _get_watchdog_lock
+
+    if check_lock:
+        lock_watchdog = _get_watchdog_lock(enforce=False)[0]
+        if lock_watchdog.locked():
+            logger.info('Watchdog lock already held. Giving up.')
+            return False, RuntimeError('Watchdog lock already held')
     return invoke(target='watchdog', extra_data=data or {}, *args, **kwargs)
