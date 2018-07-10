@@ -251,19 +251,22 @@ def invoke_watchdog(config=None, data=None, check_lock=True, *args, **kwargs):
     return invoke(target='watchdog', extra_data=data or {}, *args, **kwargs)
 
 
-def client_invoke_watchdog(check_lock=True, *args, **kwargs):
+def client_invoke_watchdog(check_lock=True, blocking_lock=False, *args, **kwargs):
     if not check_lock:
+        logger.debug('Not checking client lock')
         return invoke_watchdog(check_lock=True, *args, **kwargs)
 
     client_lock = _get_client_lock()[0]
-    locked = client_lock.acquire()
+    locked = client_lock.acquire(blocking_lock)
     if not locked:
         logger.info('Could not get Client lock. Giving up.')
         return False, RuntimeError('Client lock already held')
 
+    logger.debug('Got the client lock')
     try:
         return invoke_watchdog(with_lock=True, *args, **kwargs)
     finally:
+        logger.debug('Releasing the client lock')
         client_lock.release()
 
 
