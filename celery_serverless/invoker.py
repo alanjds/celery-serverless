@@ -219,3 +219,7 @@ def invoke(target='watchdog', config=None, *args, **kwargs):
 
 def invoke_worker(config=None, data=None, *args, **kwargs):
     return invoke(target='worker', extra_data=data or {}, *args, **kwargs)
+
+
+def invoke_watchdog(config=None, data=None, *args, **kwargs):
+    return invoke(target='watchdog', extra_data=data or {}, *args, **kwargs)

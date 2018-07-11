@@ -5,6 +5,7 @@ except ImportError:
     pass
 
 import os
+import time
 import json
 import logging
 
@@ -17,7 +18,8 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 from redlock import RedLock
-from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom
+from timeoutcontext import timeout as timeout_context
+from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, invoke_watchdog
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
@@ -82,10 +84,39 @@ def watchdog(event, context):
     else:
         watched = KombuQueueLengther(queue_url, 'celery')   # TODO: Allow queue name to be chosen
 
-    Watchdog(communicator=build_intercom(intercom_url), name=lock_name, lock=lock, watched=watched).monitor()
+    watchdog = Watchdog(communicator=build_intercom(intercom_url), name=lock_name, lock=lock, watched=watched)
+
+    try:
+        remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
+    except Exception as e:
+        logger.exception('Could not got remaining_seconds. Is the context right?')
+        remaining_seconds = 5 * 60 # 5 minutes by default
+
+    spare_time = 30  # Should be enough time to retrigger this FaaS again
+    fulfilled = False
+    try:
+        with timeout_context(remaining_seconds-spare_time):
+            watchdog.monitor()
+            fulfilled = True
+    except TimeoutError:
+        logger.warning('Still stuff to monitor but this Function is out of time. Preparing to reinvoke the Watchdog')
+
+        # Be sure that the lock is released. Then reinvoke.
+        try:
+            lock.release()
+        except (RuntimeError, AttributeError):
+            pass
+        else:
+            time.sleep(1)  # Let distributed locks to propagate
+
+        logger.info('All set. Reinvoking the Watchdog')
+        _, future = invoke_watchdog()
+        future.result()
+        logger.info('Done reinvoking another Watchdog')
 
     logger.debug('Cleaning up before exit')
     body = {
         "message": "Watchdog woke, worked, and rested.",
+        "fulfilled": fulfilled,
     }
-    return {"statusCode": 200, "body": json.dumps(body)}
+    return {"statusCode": 200 if fulfilled else 202, "body": json.dumps(body)}
