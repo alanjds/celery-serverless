@@ -30,26 +30,10 @@ try:
 except ImportError:  # Boto3 is an optional extra on setup.py
     lambda_client = None
 
-try:
-    from redis import StrictRedis
-
-    # MONKEYPATCH until https://github.com/andymccurdy/redis-py/pull/1007/ is merged
-    import redis.lock
-    def __locked(self):
-        if self.redis.get(self.name) is not None:
-            return True
-        return False
-    if not hasattr(redis.lock.Lock, 'locked'):
-        redis.lock.Lock.locked = __locked
-except ImportError:
-    pass
-
 
 from .cli_utils import run
-from .utils import run_aio_on_thread
+from .utils import run_aio_on_thread, _get_client_lock
 
-
-_CLIENT_LOCK = {}
 
 CELERY_HANDLER_PATHS = {
     'worker': 'celery_serverless.handler_worker',
@@ -268,27 +252,3 @@ def client_invoke_watchdog(check_lock=True, blocking_lock=False, *args, **kwargs
     finally:
         logger.debug('Releasing the client lock')
         client_lock.release()
-
-
-def _get_client_lock(lock_url='', lock_name='', default=multiprocessing.Lock, enforce=False):
-    if _CLIENT_LOCK and lock_name == _CLIENT_LOCK['lock_name']:
-        return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
-
-    lock_name = lock_name or os.environ.get('CELERY_SERVERLESS_CLIENT_LOCK_NAME', 'celery_serverless:watchdog-client')
-    lock_url = lock_url or os.environ.get('CELERY_SERVERLESS_LOCK_URL', '(unavailable)')
-    if enforce:
-        if lock_url == 'disabled':
-            lock_url = ''
-        else:
-            assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
-
-    if default and not lock_url:
-        lock = default()
-    elif lock_url.startswith(('redis://', 'rediss://')):
-        redis = StrictRedis.from_url(lock_url)
-        lock = redis.lock(lock_name + '-client')
-    else:
-        raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
-
-    _CLIENT_LOCK.update({'lock': lock, 'lock_name': lock_name})
-    return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
