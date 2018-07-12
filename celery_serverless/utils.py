@@ -3,8 +3,8 @@ import os
 import asyncio
 from threading import Thread
 from inspect import isawaitable
-import dummy_threading
-import multiprocessing
+from urllib.parse import urlparse
+import importlib
 
 try:
     from redis import StrictRedis
@@ -47,9 +47,9 @@ def run_aio_on_thread(coro):
     return asyncio.run_coroutine_threadsafe(coro, slave_loop)
 
 
-def _get_lock(lock_url='', lock_url_env='CELERY_SERVERLESS_LOCK_URL',
+def _get_lock(lock_url='', lock_url_env='CELERY_SERVERLESS_LOCK_URL', lock_url_default='dummy_threading://',
               lock_name='', lock_name_env='CELERY_SERVERLESS_LOCK_NAME', lock_name_default='',
-              default=dummy_threading.Lock, enforce=True) -> '(Lock, str)':
+              enforce=True) -> '(Lock, str)':
     """
     Build or fetch a lock from `lock_url` or `lock_url_env` envvar.
     If needed, use `lock_url` or `lock_name_env` envvar for the lock name,
@@ -67,17 +67,19 @@ def _get_lock(lock_url='', lock_url_env='CELERY_SERVERLESS_LOCK_URL',
     if lock_url.startswith(('redis://', 'rediss://')):
         redis = StrictRedis.from_url(lock_url)
         lock = redis.lock(lock_name)
-    elif default and not lock_url:
-        lock = default()
+    elif lock_url_default and not lock_url:
+        defaultlock_module_name = urlparse(lock_url_default).scheme
+        defaultlock_module = importlib.import_module(defaultlock_module_name)
+        lock = defaultlock_module.Lock()
     else:
         raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
     return lock, lock_name
 
 
 def get_watchdog_lock(enforce=True) -> '(Lock, str)':
-    return _get_lock(lock_url_env='CELERY_SERVERLESS_LOCK_URL',
+    return _get_lock(lock_url_env='CELERY_SERVERLESS_LOCK_URL', lock_url_default='dummy_threading://',
                      lock_name_env='CELERY_SERVERLESS_LOCK_NAME', lock_name_default='celery_serverless:watchdog',
-                     enforce=enforce, default=dummy_threading.Lock)
+                     enforce=enforce)
 
 
 _CLIENT_LOCK = {}
@@ -86,10 +88,11 @@ def get_client_lock(enforce=False) -> '(Lock, str)':
     if _CLIENT_LOCK:
         return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
 
-    lock, lock_name = _get_lock(lock_url_env='CELERY_SERVERLESS_LOCK_URL',
-                                lock_name_env='CELERY_SERVERLESS_LOCK_NAME',
-                                lock_name_default='celery_serverless:watchdog-client',
-                                enforce=enforce, default=multiprocessing.Lock)
+    lock, lock_name = _get_lock(
+        lock_url_env='CELERY_SERVERLESS_LOCK_URL', lock_url_default='multiprocessing://',
+        lock_name_env='CELERY_SERVERLESS_LOCK_NAME', lock_name_default='celery_serverless:watchdog-client',
+        enforce=enforce,
+    )
 
     _CLIENT_LOCK.update({'lock': lock, 'lock_name': lock_name})
     return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
