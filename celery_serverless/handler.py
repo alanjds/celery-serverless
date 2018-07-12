@@ -98,8 +98,6 @@ def watchdog(event, context):
             lock.release()
         except (RuntimeError, AttributeError):
             pass
-        else:
-            time.sleep(1)  # Let distributed locks to propagate
 
         logger.info('All set. Reinvoking the Watchdog')
         _, future = invoke_watchdog(check_lock=False)
