@@ -47,14 +47,22 @@ def run_aio_on_thread(coro):
     return asyncio.run_coroutine_threadsafe(coro, slave_loop)
 
 
-def _get_watchdog_lock(lock_url='', lock_name='', default=dummy_threading.Lock, enforce=True) -> '(Lock, str)':
-    lock_name = lock_name or os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless:watchdog')
-    lock_url = lock_url or os.environ.get('CELERY_SERVERLESS_LOCK_URL', '')
+def _get_lock(lock_url='', lock_url_env='CELERY_SERVERLESS_LOCK_URL',
+              lock_name='', lock_name_env='CELERY_SERVERLESS_LOCK_NAME', lock_name_default='',
+              default=dummy_threading.Lock, enforce=True) -> '(Lock, str)':
+    """
+    Build or fetch a lock from `lock_url` or `lock_url_env` envvar.
+    If needed, use `lock_url` or `lock_name_env` envvar for the lock name,
+    falling back to `lock_name_default` contents.
+    Pass `enforce=True` raise a RuntimeError if lock url got empty.
+    """
+    lock_name = os.environ.get(lock_name_env, lock_name_default)
+    lock_url = os.environ.get(lock_url_env, '')
     if enforce:
         if lock_url == 'disabled':
             lock_url = ''
         else:
-            assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
+            assert lock_url, ('The %s envvar should be set. Even to "disabled" to disable it.' % lock_url_env)
 
     if lock_url.startswith(('redis://', 'rediss://')):
         redis = StrictRedis.from_url(lock_url)
@@ -66,27 +74,22 @@ def _get_watchdog_lock(lock_url='', lock_name='', default=dummy_threading.Lock, 
     return lock, lock_name
 
 
+def _get_watchdog_lock(enforce=True) -> '(Lock, str)':
+    return _get_lock(lock_url_env='CELERY_SERVERLESS_LOCK_URL',
+                     lock_name_env='CELERY_SERVERLESS_LOCK_NAME', lock_name_default='celery_serverless:watchdog',
+                     enforce=enforce, default=dummy_threading.Lock)
+
+
 _CLIENT_LOCK = {}
 
-def _get_client_lock(lock_url='', lock_name='', default=multiprocessing.Lock, enforce=False):
-    if _CLIENT_LOCK and lock_name == _CLIENT_LOCK['lock_name']:
+def _get_client_lock(enforce=False) -> '(Lock, str)':
+    if _CLIENT_LOCK:
         return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
 
-    lock_name = lock_name or os.environ.get('CELERY_SERVERLESS_CLIENT_LOCK_NAME', 'celery_serverless:watchdog-client')
-    lock_url = lock_url or os.environ.get('CELERY_SERVERLESS_LOCK_URL', '(unavailable)')
-    if enforce:
-        if lock_url == 'disabled':
-            lock_url = ''
-        else:
-            assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
-
-    if default and not lock_url:
-        lock = default()
-    elif lock_url.startswith(('redis://', 'rediss://')):
-        redis = StrictRedis.from_url(lock_url)
-        lock = redis.lock(lock_name + '-client')
-    else:
-        raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
+    lock, lock_name = _get_lock(lock_url_env='CELERY_SERVERLESS_LOCK_URL',
+                                lock_name_env='CELERY_SERVERLESS_LOCK_NAME',
+                                lock_name_default='celery_serverless:watchdog-client',
+                                enforce=enforce, default=multiprocessing.Lock)
 
     _CLIENT_LOCK.update({'lock': lock, 'lock_name': lock_name})
     return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
