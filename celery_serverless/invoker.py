@@ -6,6 +6,7 @@ import functools
 import logging
 import codecs
 import json
+import multiprocessing
 from pprint import pformat
 
 import dirtyjson
@@ -29,8 +30,10 @@ try:
 except ImportError:  # Boto3 is an optional extra on setup.py
     lambda_client = None
 
+
 from .cli_utils import run
-from .utils import run_aio_on_thread
+from .utils import run_aio_on_thread, get_client_lock
+
 
 CELERY_HANDLER_PATHS = {
     'worker': 'celery_serverless.handler_worker',
@@ -221,5 +224,31 @@ def invoke_worker(config=None, data=None, *args, **kwargs):
     return invoke(target='worker', extra_data=data or {}, *args, **kwargs)
 
 
-def invoke_watchdog(config=None, data=None, *args, **kwargs):
+def invoke_watchdog(config=None, data=None, check_lock=True, *args, **kwargs):
+    from .watchdog import get_watchdog_lock
+
+    if check_lock:
+        lock_watchdog = get_watchdog_lock(enforce=False)[0]
+        if lock_watchdog.locked():
+            logger.info('Watchdog lock already held. Giving up.')
+            return False, RuntimeError('Watchdog lock already held')
     return invoke(target='watchdog', extra_data=data or {}, *args, **kwargs)
+
+
+def client_invoke_watchdog(check_lock=True, blocking_lock=False, *args, **kwargs):
+    if not check_lock:
+        logger.debug('Not checking client lock')
+        return invoke_watchdog(check_lock=True, *args, **kwargs)
+
+    client_lock = get_client_lock()[0]
+    locked = client_lock.acquire(blocking_lock)
+    if not locked:
+        logger.info('Could not get Client lock. Giving up.')
+        return False, RuntimeError('Client lock already held')
+
+    logger.debug('Got the client lock')
+    try:
+        return invoke_watchdog(with_lock=True, *args, **kwargs)
+    finally:
+        logger.debug('Releasing the client lock')
+        client_lock.release()

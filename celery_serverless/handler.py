@@ -17,9 +17,10 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
     logger.setLevel(os.environ.get('CELERY_SERVERLESS_LOGLEVEL'))
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
-from redlock import RedLock
+from redis import StrictRedis
 from timeoutcontext import timeout as timeout_context
-from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, invoke_watchdog
+from celery_serverless.invoker import invoke_watchdog
+from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
@@ -32,7 +33,7 @@ def worker(event, context, intercom_url=None):
     try:
         remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
     except Exception as e:
-        logger.exception('Could not got remaining_seconds. Is the context right?')
+        logger.exception('Could not get remaining_seconds. Is the context right?')
         remaining_seconds = 5 * 60 # 5 minutes by default
 
     softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
@@ -62,22 +63,13 @@ def worker(event, context, intercom_url=None):
 
 @handler_wrapper
 def watchdog(event, context):
-    lock_name = os.environ.get('CELERY_SERVERLESS_LOCK_NAME', 'celery_serverless:watchdog')
-    lock_url = os.environ.get('CELERY_SERVERLESS_LOCK_URL')
-    assert lock_url, 'The CELERY_SERVERLESS_LOCK_URL envvar should be set. Even to "disabled" to disable it.'
-
     queue_url = os.environ.get('CELERY_SERVERLESS_QUEUE_URL')
     assert queue_url, 'The CELERY_SERVERLESS_QUEUE_URL envvar should be set. Even to "disabled" to disable it.'
 
     intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
     assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
 
-    if lock_url == 'disabled':
-        lock = None
-    elif lock_url.startswith(('redis://', 'rediss://')):
-        lock = RedLock(lock_name, connection_details=[{'url': node} for node in lock_url.split(',')])
-    else:
-        raise RuntimeError("This URL is not supported. Only 'redis[s]://...' is supported for now")
+    lock, lock_name = get_watchdog_lock(enforce=True)
 
     if queue_url == 'disabled':
         watched = None
@@ -106,11 +98,9 @@ def watchdog(event, context):
             lock.release()
         except (RuntimeError, AttributeError):
             pass
-        else:
-            time.sleep(1)  # Let distributed locks to propagate
 
         logger.info('All set. Reinvoking the Watchdog')
-        _, future = invoke_watchdog()
+        _, future = invoke_watchdog(check_lock=False)
         future.result()
         logger.info('Done reinvoking another Watchdog')
 

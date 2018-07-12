@@ -1,4 +1,5 @@
 # coding: utf-8
+import os
 import time
 import uuid
 import logging
@@ -13,7 +14,9 @@ import backoff
 from redis import StrictRedis
 from kombu import Connection
 from kombu.transport import pyamqp
-from celery_serverless.invoker import invoke_worker, invoke_watchdog
+from celery_serverless.invoker import invoke_worker
+
+from .utils import get_watchdog_lock
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
@@ -104,7 +107,7 @@ class Watchdog(object):
         return success_calls
 
     def monitor(self):
-        locked = self._lock.acquire()
+        locked = self._lock.acquire(False)
         if not locked:
             logger.info('Could not get the lock. Giving up.')
             return 0
