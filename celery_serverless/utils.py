@@ -3,7 +3,6 @@ import os
 import asyncio
 from threading import Thread
 from inspect import isawaitable
-from urllib.parse import urlparse
 import importlib
 
 try:
@@ -72,7 +71,7 @@ def _get_lock(lock_url='', lock_url_env='CELERY_SERVERLESS_LOCK_URL', lock_url_d
         redis = StrictRedis.from_url(lock_url)
         lock = redis.lock(lock_name)
     elif lock_url_default and not lock_url:
-        defaultlock_module_name = urlparse(lock_url_default).scheme
+        defaultlock_module_name = lock_url_default.partition('://')[0]
         defaultlock_module = importlib.import_module(defaultlock_module_name)
         lock = defaultlock_module.Lock()
     else:
