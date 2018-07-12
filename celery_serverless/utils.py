@@ -51,10 +51,14 @@ def _get_lock(lock_url='', lock_url_env='CELERY_SERVERLESS_LOCK_URL', lock_url_d
               lock_name='', lock_name_env='CELERY_SERVERLESS_LOCK_NAME', lock_name_default='',
               enforce=True) -> '(Lock, str)':
     """
-    Build or fetch a lock from `lock_url` or `lock_url_env` envvar.
-    If needed, use `lock_url` or `lock_name_env` envvar for the lock name,
-    falling back to `lock_name_default` contents.
-    Pass `enforce=True` raise a RuntimeError if lock url got empty.
+    Build or fetch a lock from `lock_url` or `lock_url_env` envvar,
+    falling back to `lock_url_default` contents. Can be a python module having
+    a Lock inside. E.g: 'multiprocessing://'
+
+    If the lock needs it, use `lock_url` or `lock_name_env` envvar
+    for the lock name, falling back to `lock_name_default` contents.
+
+    Passing `enforce=True` will raise a RuntimeError if lock url is empty.
     """
     lock_name = os.environ.get(lock_name_env, lock_name_default)
     lock_url = os.environ.get(lock_url_env, '')
