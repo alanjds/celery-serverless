@@ -20,7 +20,7 @@ print('Celery serverless loglevel:', logger.getEffectiveLevel())
 from redis import StrictRedis
 from timeoutcontext import timeout as timeout_context
 from celery_serverless.invoker import invoke_watchdog
-from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, _get_watchdog_lock
+from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock
 from celery_serverless.worker_management import spawn_worker, attach_hooks
 hooks = []
 
@@ -69,7 +69,7 @@ def watchdog(event, context):
     intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
     assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
 
-    lock, lock_name = _get_watchdog_lock(enforce=True)
+    lock, lock_name = get_watchdog_lock(enforce=True)
 
     if queue_url == 'disabled':
         watched = None

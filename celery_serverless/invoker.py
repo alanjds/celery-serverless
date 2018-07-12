@@ -32,7 +32,7 @@ except ImportError:  # Boto3 is an optional extra on setup.py
 
 
 from .cli_utils import run
-from .utils import run_aio_on_thread, _get_client_lock
+from .utils import run_aio_on_thread, get_client_lock
 
 
 CELERY_HANDLER_PATHS = {
@@ -225,10 +225,10 @@ def invoke_worker(config=None, data=None, *args, **kwargs):
 
 
 def invoke_watchdog(config=None, data=None, check_lock=True, *args, **kwargs):
-    from .watchdog import _get_watchdog_lock
+    from .watchdog import get_watchdog_lock
 
     if check_lock:
-        lock_watchdog = _get_watchdog_lock(enforce=False)[0]
+        lock_watchdog = get_watchdog_lock(enforce=False)[0]
         if lock_watchdog.locked():
             logger.info('Watchdog lock already held. Giving up.')
             return False, RuntimeError('Watchdog lock already held')
@@ -240,7 +240,7 @@ def client_invoke_watchdog(check_lock=True, blocking_lock=False, *args, **kwargs
         logger.debug('Not checking client lock')
         return invoke_watchdog(check_lock=True, *args, **kwargs)
 
-    client_lock = _get_client_lock()[0]
+    client_lock = get_client_lock()[0]
     locked = client_lock.acquire(blocking_lock)
     if not locked:
         logger.info('Could not get Client lock. Giving up.')

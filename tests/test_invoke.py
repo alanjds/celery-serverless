@@ -44,7 +44,7 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
         times_invoked += 1
 
         # 1) Watchdog fetches its lock
-        lock, lock_name = watchdog._get_watchdog_lock(enforce=True)
+        lock, lock_name = watchdog.get_watchdog_lock(enforce=True)
 
         # 2) It runs with the lock or cancels
         with_lock = lock.acquire(False)

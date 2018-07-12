@@ -16,7 +16,7 @@ from kombu import Connection
 from kombu.transport import pyamqp
 from celery_serverless.invoker import invoke_worker
 
-from .utils import _get_watchdog_lock
+from .utils import get_watchdog_lock
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')

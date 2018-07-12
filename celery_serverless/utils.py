@@ -74,7 +74,7 @@ def _get_lock(lock_url='', lock_url_env='CELERY_SERVERLESS_LOCK_URL',
     return lock, lock_name
 
 
-def _get_watchdog_lock(enforce=True) -> '(Lock, str)':
+def get_watchdog_lock(enforce=True) -> '(Lock, str)':
     return _get_lock(lock_url_env='CELERY_SERVERLESS_LOCK_URL',
                      lock_name_env='CELERY_SERVERLESS_LOCK_NAME', lock_name_default='celery_serverless:watchdog',
                      enforce=enforce, default=dummy_threading.Lock)
@@ -82,7 +82,7 @@ def _get_watchdog_lock(enforce=True) -> '(Lock, str)':
 
 _CLIENT_LOCK = {}
 
-def _get_client_lock(enforce=False) -> '(Lock, str)':
+def get_client_lock(enforce=False) -> '(Lock, str)':
     if _CLIENT_LOCK:
         return _CLIENT_LOCK['lock'], _CLIENT_LOCK['lock_name']
 
