@@ -33,7 +33,7 @@ def worker(event, context, intercom_url=None):
     try:
         remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
     except Exception as e:
-        logger.exception('Could not got remaining_seconds. Is the context right?')
+        logger.exception('Could not get remaining_seconds. Is the context right?')
         remaining_seconds = 5 * 60 # 5 minutes by default
 
     softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
