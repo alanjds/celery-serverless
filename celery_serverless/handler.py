@@ -18,6 +18,7 @@ if os.environ.get('CELERY_SERVERLESS_LOGLEVEL'):
 print('Celery serverless loglevel:', logger.getEffectiveLevel())
 
 from redis import StrictRedis
+from redis.lock import LockError
 from timeoutcontext import timeout as timeout_context
 from celery_serverless.invoker import invoke_watchdog
 from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock
@@ -96,7 +97,7 @@ def watchdog(event, context):
         # Be sure that the lock is released. Then reinvoke.
         try:
             lock.release()
-        except (RuntimeError, AttributeError):
+        except (RuntimeError, AttributeError, LockError):
             pass
 
         logger.info('All set. Reinvoking the Watchdog')
