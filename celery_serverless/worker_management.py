@@ -73,6 +73,7 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
     try:
         celery.bin.celery.main(command_argv)  # Will block until worker dies.
     except SystemExit as e:  # Worker is dead.
+        logger.debug('Caught a SystemExit.')
         state = celery.worker.state
         state.should_stop = False
         state.should_terminate = False
