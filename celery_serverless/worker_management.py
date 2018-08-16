@@ -140,6 +140,8 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url='', worker_meta
         'prefix': worker_metadata['prefix'],
     }
 
+    logger.debug("Event -> context[worker_watchdog]: %s", context['worker_watchdog'])
+
     @celeryd_init.connect  # After worker process up
     def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
         logger.debug('Connecting to the broker [celeryd_init]')

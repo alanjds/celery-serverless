@@ -40,6 +40,8 @@ def worker(event, context, intercom_url=None):
     softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
     hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
 
+    logger.debug('Event: %s', event)
+
     if not hooks:
         logger.debug('Fresh Celery worker. Attach hooks!')
         hooks = attach_hooks(intercom_url=intercom_url, worker_metadata=event or {})
