@@ -247,12 +247,12 @@ def inform_worker_busy(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENA
         pipe.expire(worker_key, DEFAULT_WORKER_EXPIRE)
         pipe.expire(workers_busy_key, DEFAULT_WORKER_EXPIRE)
         pipe.expire(workers_started_key, DEFAULT_WORKER_EXPIRE)
-        result, *_ = pipe.execute()
+        result_add, result_rem, *_ = pipe.execute()
 
     logger.info('Informed [busy]: %s', worker_key)
-    logger.debug('ZADD %s: %s', workers_busy_key, result[0])
-    logger.debug('ZREM %s: %s', workers_started_key, result[1])
-    return result
+    logger.debug('ZADD %s: %s', workers_busy_key, result_add)
+    logger.debug('ZREM %s: %s', workers_started_key, result_rem)
+    return result_add
 
 
 def inform_worker_leave(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAME):
