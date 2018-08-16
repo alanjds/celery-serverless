@@ -22,7 +22,7 @@ from redis.lock import LockError
 from timeoutcontext import timeout as timeout_context
 from celery_serverless.invoker import invoke_watchdog
 from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock
-from celery_serverless.worker_management import spawn_worker, attach_hooks
+from celery_serverless.worker_management import spawn_worker, attach_hooks, set_worker_metadata
 hooks = []
 
 
@@ -42,9 +42,11 @@ def worker(event, context, intercom_url=None):
 
     logger.debug('Event: %s', event)
 
+    set_worker_metadata(intercom_url=intercom_url, worker_metadata=event or {})
+
     if not hooks:
         logger.debug('Fresh Celery worker. Attach hooks!')
-        hooks = attach_hooks(intercom_url=intercom_url, worker_metadata=event or {})
+        hooks = attach_hooks()
     else:
         logger.debug('Old Celery worker. Already have hooks.')
 
