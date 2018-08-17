@@ -38,7 +38,11 @@ def _get_options_from_environ():
             yield (k,v)
 
 
-def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
+def spawn_worker(task_max_lifetime=300-15-30, softlimit=30, hardlimit=15, lifetime_getter:'callable'=None, **options):
+    context['lifetime_getter'] = lifetime_getter
+    context['task_max_lifetime'] = task_max_lifetime
+    remaining_seconds = next(lifetime_getter)
+
     command_argv = [
         'celery',
         'worker',
@@ -52,9 +56,12 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
         '-P', 'solo',
     ]
 
-    if softlimit:
+    softlimit = remaining_seconds-softlimit  # Poke the job 30sec before the abyss
+    if softlimit > 5:  # At least 5 sec.
         command_argv.extend(['--soft-time-limit', '%s' % softlimit])
-    if hardlimit:
+
+    hardlimit = remaining_seconds-hardlimit  # Kill the job 15sec before the abyss
+    if hardlimit:  # At least 5 sec.
         command_argv.extend(['--time-limit', '%s' % hardlimit])
 
     options.update(dict(_get_options_from_environ()))
@@ -110,6 +117,34 @@ def _shutdown_worker(context):
         prefix=watchdog_context['prefix'],
     )
     raise WorkerShutdown()
+
+
+def is_time_up():
+    """
+    Will a new task fail if it uses the whole task_max_lifetime?
+    """
+    return context['task_max_lifetime'] > context['lifetime_getter']()
+
+
+def remaining_lifetime_getter(lambda_context=None) -> 'float':
+    """
+    Generates the remaining lifetime of this Lambda in seconds,
+    given a 'lambda_context'
+    """
+    from datetime import timedelta, datetime
+
+    starting_time = datetime.now()
+    try:
+        initial_remaining_millis = lambda_context.get_remaining_time_in_millis()
+    except Exception as e:
+        logger.exception('Could not get remaining_seconds. Is the context right?')
+        initial_remaining_millis = 5 * 60 * 1000 # 5 minutes by default
+    ending_time = starting_time + timedelta(milliseconds=initial_remaining_millis)
+
+    while True:
+        remaining_seconds = (ending_time - datetime.now()).seconds
+        logger.info('Remaining time calculated: %s sec.', remaining_seconds)
+        yield remaining_seconds
 
 
 def set_worker_metadata(intercom_url='', worker_metadata=None):
