@@ -222,9 +222,10 @@ def inform_worker_new(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAM
 
         pipe.zadd(workers_started_key, **{worker_key: metadata['time_join']})
         pipe.expire(workers_started_key, DEFAULT_WORKER_EXPIRE)  # Renew expire limit
-        result, *_ = pipe.execute()
+        result, _, result_zadd, *_ = pipe.execute()
 
-    logger.debug('Informed [new]: %s', worker_key)
+    logger.info('Informed [new]: %s', worker_key)
+    logger.debug('ZADD %s: %s', workers_started_key, result_zadd)
     return (worker_key, metadata) if result else result
 
 
@@ -246,10 +247,12 @@ def inform_worker_busy(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENA
         pipe.expire(worker_key, DEFAULT_WORKER_EXPIRE)
         pipe.expire(workers_busy_key, DEFAULT_WORKER_EXPIRE)
         pipe.expire(workers_started_key, DEFAULT_WORKER_EXPIRE)
-        result, *_ = pipe.execute()
+        result_add, result_rem, *_ = pipe.execute()
 
-    logger.debug('Informed [busy]: %s', worker_key)
-    return result
+    logger.info('Informed [busy]: %s', worker_key)
+    logger.debug('ZADD %s: %s', workers_busy_key, result_add)
+    logger.debug('ZREM %s: %s', workers_started_key, result_rem)
+    return result_add
 
 
 def inform_worker_leave(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAME):
@@ -267,7 +270,9 @@ def inform_worker_leave(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASEN
         pipe.zrem(workers_busy_key, worker_key)
         _, *deleted = pipe.execute()
 
-    logger.debug('Informed [leave]: %s', worker_key)
+    logger.info('Informed [leave]: %s', worker_key)
+    logger.debug('ZREM %s: %s', workers_started_key, deleted[0])
+    logger.debug('ZREM %s: %s', workers_busy_key, deleted[1])
     return len(deleted)
 
 
