@@ -201,7 +201,7 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
 
     @worker_ready.connect  # After broker queue connected
     def _set_job_watchdog(sender=None, *args, **kwargs):
-        assert context['worker'] == sender.controller, 'Oops: Are the CONTEXT messed?'
+        # assert context['worker'] == sender.controller, 'Oops: Are the CONTEXT messed?'
         worker = context['worker']
         worker.__broker_connected = True
         logger.debug('Connected to the broker! [worker_ready]')
@@ -252,10 +252,20 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
         task._original_request.message.ack()  # Manually, as WorkerShutdown() will redeliver current message
 
     @task_postrun.connect  # Task finished
-    def _demand_shutdown(*args, **kwargs):
+    def _consider_a_shutdown(*args, **kwargs):
         worker = context['worker']
         worker.__task_finished = True
-        logger.info('Job done. Now shutdown! [task_postrun]')
+        logger.info('Job done. Is there time for one more? [task_postrun]')
+
+        if is_time_up():
+            logger.info('No time for another job. Now shutdown! [task_postrun]')
+            _demand_shutdown(*args, **kwargs)
+        else:
+            logger.info('There is still time for another job. Keep fetching! [task_postrun]')
+            _set_job_watchdog()
+
+    def _demand_shutdown(*args, **kwargs):
+        worker = context['worker']
 
         # Hack around "Worker shutdown creates duplicate messages in SQS broker"
         # (applies to any broker but 'amqp', if I understand correctly)
