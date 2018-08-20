@@ -77,6 +77,8 @@ class WorkerRunner(object):
     # To store the Worker instance.
     # Sometime it will change to a Thread or Async aware thing
     worker = None
+    hooks = None  # type: list
+    lifetime_getter = None  # type: callable
 
     def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15):
         self._softlimit = softlimit
@@ -85,7 +87,7 @@ class WorkerRunner(object):
         self._intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
 
     def run_worker(self, **options):
-        remaining_seconds = next(self._lifetime_getter)
+        remaining_seconds = next(self.lifetime_getter) if self.lifetime_getter else 5*60
 
         command_argv = [
             'celery',
@@ -145,7 +147,7 @@ class WorkerRunner(object):
         """
         Will a new task fail if it uses the whole task_max_lifetime?
         """
-        return self._task_max_lifetime > self._lifetime_getter()
+        return self._task_max_lifetime > self.lifetime_getter()
 
     def set_worker_metadata(self, intercom_url='', worker_metadata=None):
         intercom_url = intercom_url or self._intercom_url

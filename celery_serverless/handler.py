@@ -29,7 +29,6 @@ _worker_runner = WorkerRunner()
 
 @handler_wrapper
 def worker(event, context, intercom_url=None):
-    global hooks
     event = event or {}
 
     logger.debug('Event: %s', event)
