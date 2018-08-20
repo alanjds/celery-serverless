@@ -89,6 +89,7 @@ class WorkerSpawner(object):
             'lifetime_getter': lifetime_getter,
             'task_max_lifetime': task_max_lifetime,
         }
+        self.intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
 
     def spawn_worker(self, **options):
         remaining_seconds = next(self.context['lifetime_getter'])
@@ -154,7 +155,7 @@ class WorkerSpawner(object):
         return self.context['task_max_lifetime'] > self.context['lifetime_getter']()
 
     def set_worker_metadata(self, intercom_url='', worker_metadata=None):
-        intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+        intercom_url = intercom_url or self.intercom_url
         assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
 
         worker_metadata = worker_metadata or {
