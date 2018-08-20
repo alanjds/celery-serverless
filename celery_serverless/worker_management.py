@@ -73,7 +73,7 @@ def remaining_lifetime_getter(lambda_context=None) -> 'float':
         yield remaining_seconds
 
 
-class WorkerSpawner(object):
+class WorkerRunner(object):
     # To store the Worker instance.
     # Sometime it will change to a Thread or Async aware thing
     worker = None
@@ -85,7 +85,7 @@ class WorkerSpawner(object):
         self._task_max_lifetime = task_max_lifetime
         self._intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
 
-    def spawn_worker(self, **options):
+    def run_worker(self, **options):
         remaining_seconds = next(self._lifetime_getter)
 
         command_argv = [
