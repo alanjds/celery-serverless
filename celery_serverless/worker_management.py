@@ -58,6 +58,27 @@ def cancel_wakeme():
     signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
 
 
+def remaining_lifetime_getter(lambda_context=None) -> 'float':
+    """
+    Generates the remaining lifetime of this Lambda in seconds,
+    given a 'lambda_context'
+    """
+    from datetime import timedelta, datetime
+
+    starting_time = datetime.now()
+    try:
+        initial_remaining_millis = lambda_context.get_remaining_time_in_millis()
+    except Exception as e:
+        logger.exception('Could not get remaining_seconds. Is the context right?')
+        initial_remaining_millis = 5 * 60 * 1000 # 5 minutes by default
+    ending_time = starting_time + timedelta(milliseconds=initial_remaining_millis)
+
+    while True:
+        remaining_seconds = (ending_time - datetime.now()).seconds
+        logger.info('Remaining time calculated: %s sec.', remaining_seconds)
+        yield remaining_seconds
+
+
 class WorkerSpawner(object):
     context = None  # type: dict
 
@@ -135,26 +156,6 @@ def is_time_up(self):
     """
     return self.context['task_max_lifetime'] > self.context['lifetime_getter']()
 
-
-def remaining_lifetime_getter(lambda_context=None) -> 'float':
-    """
-    Generates the remaining lifetime of this Lambda in seconds,
-    given a 'lambda_context'
-    """
-    from datetime import timedelta, datetime
-
-    starting_time = datetime.now()
-    try:
-        initial_remaining_millis = lambda_context.get_remaining_time_in_millis()
-    except Exception as e:
-        logger.exception('Could not get remaining_seconds. Is the context right?')
-        initial_remaining_millis = 5 * 60 * 1000 # 5 minutes by default
-    ending_time = starting_time + timedelta(milliseconds=initial_remaining_millis)
-
-    while True:
-        remaining_seconds = (ending_time - datetime.now()).seconds
-        logger.info('Remaining time calculated: %s sec.', remaining_seconds)
-        yield remaining_seconds
 
 
 def set_worker_metadata(self, intercom_url='', worker_metadata=None):
