@@ -16,10 +16,6 @@ from celery_serverless import watchdog
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
 
-# To store the Worker instance.
-# Sometime it will change to a Thread or Async aware thing
-context = {}
-
 
 class PatchedRequest(celery.worker.request.Request):
     def __init__(self, *args, **kwargs):
@@ -79,19 +75,19 @@ def remaining_lifetime_getter(lambda_context=None) -> 'float':
 
 
 class WorkerSpawner(object):
-    context = None  # type: dict
+    # To store the Worker instance.
+    # Sometime it will change to a Thread or Async aware thing
+    worker = None
 
     def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15, lifetime_getter:'callable'=None):
         self._softlimit = softlimit
         self._hardlimit = hardlimit
-        self.context = {
-            'lifetime_getter': lifetime_getter,
-            'task_max_lifetime': task_max_lifetime,
-        }
-        self.intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+        self._lifetime_getter = lifetime_getter
+        self._task_max_lifetime = task_max_lifetime
+        self._intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
 
     def spawn_worker(self, **options):
-        remaining_seconds = next(self.context['lifetime_getter'])
+        remaining_seconds = next(self._lifetime_getter)
 
         command_argv = [
             'celery',
@@ -139,7 +135,7 @@ class WorkerSpawner(object):
 
     def _shutdown_worker(self):
         # Inform the Watchdog Monitor [leave]
-        watchdog_context = self.context['worker_watchdog']
+        watchdog_context = self._watchdog_context
         watchdog.inform_worker_leave(
             watchdog_context['intercom'],
             watchdog_context['worker_id'],
@@ -151,10 +147,10 @@ class WorkerSpawner(object):
         """
         Will a new task fail if it uses the whole task_max_lifetime?
         """
-        return self.context['task_max_lifetime'] > self.context['lifetime_getter']()
+        return self._task_max_lifetime > self._lifetime_getter()
 
     def set_worker_metadata(self, intercom_url='', worker_metadata=None):
-        intercom_url = intercom_url or self.intercom_url
+        intercom_url = intercom_url or self._intercom_url
         assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
 
         worker_metadata = worker_metadata or {
@@ -162,13 +158,13 @@ class WorkerSpawner(object):
             'prefix': '(undefined)',
         }
 
-        self.context['worker_watchdog'] = {
+        self._watchdog_context = {
             'intercom': watchdog.build_intercom(intercom_url),
             'worker_metadata': worker_metadata,
             'worker_id': worker_metadata['worker_id'],
             'prefix': worker_metadata['prefix'],
         }
-        logger.debug("Event -> context[worker_watchdog]: %s", self.context['worker_watchdog'])
+        logger.debug("Event -> _watchdog_context: %s", self._watchdog_context)
 
     def attach_hooks(self, wait_connection=8.0, wait_job=4.0):
         """
@@ -187,7 +183,7 @@ class WorkerSpawner(object):
         @celeryd_init.connect  # After worker process up
         def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
             logger.debug('Connecting to the broker [celeryd_init]')
-            self.context['worker'] = worker = instance
+            self._worker = worker = instance
 
             worker.__broker_connected = False
             def _maybe_shutdown(*args, **kwargs):
@@ -207,7 +203,7 @@ class WorkerSpawner(object):
         @worker_ready.connect  # After broker queue connected
         def _set_job_watchdog(sender=None, *args, **kwargs):
             # assert context['worker'] == sender.controller, 'Oops: Are the CONTEXT messed?'
-            worker = self.context['worker']
+            worker = self._worker
             worker.__broker_connected = True
             logger.debug('Connected to the broker! [worker_ready]')
 
@@ -230,7 +226,7 @@ class WorkerSpawner(object):
         @task_prerun.connect  # Task already got.
         def _unset_watchdogs(*args, **kwargs):
             # Worker is not received on this signal, direct or indirectly :/
-            worker = self.context['worker']
+            worker = self._worker
             worker.__task_received = True
 
             logger.info('Task received! [task_prerun]')
@@ -240,7 +236,7 @@ class WorkerSpawner(object):
             worker.consumer.connection._default_channel.do_restore = True
             assert not worker.__task_finished, 'Should had shutdown on task_success. Not here!'
 
-            watchdog_context = self.context['worker_watchdog']
+            watchdog_context = self._watchdog_context
             watchdog.inform_worker_busy(
                 watchdog_context['intercom'],
                 watchdog_context['worker_id'],
@@ -252,13 +248,13 @@ class WorkerSpawner(object):
             task = sender
             logger.info('Job done. Stop receiving new messages avoiding Kombu prefetch. [task_success]')
 
-            worker = self.context['worker']  # TODO: Get the list of queues.
+            worker = self._worker  # TODO: Get the list of queues.
             worker.consumer.cancel_task_queue('celery')  # Manually, to prevent the next line to receive a new task
             task._original_request.message.ack()  # Manually, as WorkerShutdown() will redeliver current message
 
         @task_postrun.connect  # Task finished
         def _consider_a_shutdown(*args, **kwargs):
-            worker = self.context['worker']
+            worker = self._worker
             worker.__task_finished = True
             logger.info('Job done. Is there time for one more? [task_postrun]')
 
@@ -274,7 +270,7 @@ class WorkerSpawner(object):
         return self._hooks
 
     def _demand_shutdown(self, *args, **kwargs):
-        worker = self.context['worker']
+        worker = self._worker
 
         # Hack around "Worker shutdown creates duplicate messages in SQS broker"
         # (applies to any broker but 'amqp', if I understand correctly)
