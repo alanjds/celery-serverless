@@ -266,7 +266,7 @@ class WorkerRunner(object):
                 _set_job_watchdog()
 
         # Using weak references. Is up to the caller to clear the callbacks produced
-        self.hooks = [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success]
+        self.hooks = [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _consider_a_shutdown]
         return self.hooks
 
     def _demand_shutdown(self, *args, **kwargs):
