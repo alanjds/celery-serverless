@@ -107,7 +107,7 @@ class WorkerRunner(object):
             command_argv.extend(['--soft-time-limit', '%s' % softlimit])
 
         hardlimit = remaining_seconds-self._hardlimit  # Kill the job 15sec before the abyss
-        if hardlimit:  # At least 5 sec.
+        if hardlimit > 5:  # At least 5 sec.
             command_argv.extend(['--time-limit', '%s' % hardlimit])
 
         options.update(dict(_get_options_from_environ()))
