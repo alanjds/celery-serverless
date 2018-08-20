@@ -38,10 +38,39 @@ def _get_options_from_environ():
             yield (k,v)
 
 
-def spawn_worker(task_max_lifetime=300-15-30, softlimit=30, hardlimit=15, lifetime_getter:'callable'=None, **options):
-    context['lifetime_getter'] = lifetime_getter
-    context['task_max_lifetime'] = task_max_lifetime
-    remaining_seconds = next(lifetime_getter)
+def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args, **kwargs):
+    """
+    Sets an alarm via Unix SIGALRM up to 'seconds' ahead.
+    Then calls the 'callback'.
+    Only ONE alarm can exist at a time. If this function is called multiple times, only the
+    last call remains active.
+    """
+    if reason:
+        reason = 'waiting for "%s"' % reason
+    logger.debug('Registering an ALRM for %.2f seconds ahead %s', delay, reason)
+    signal.signal(signal.SIGALRM, callback)
+    signal.setitimer(signal.ITIMER_REAL, delay)
+
+
+def cancel_wakeme():
+    """Disables the actual Unix SIGALRM set, if any"""
+    signal.signal(signal.SIGALRM, signal.SIG_DFL)   # Play safe
+    signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
+
+
+class WorkerSpawner(object):
+    context = None  # type: dict
+
+    def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15, lifetime_getter:'callable'=None):
+        self._softlimit = softlimit
+        self._hardlimit = hardlimit
+        self.context = {
+            'lifetime_getter': lifetime_getter,
+            'task_max_lifetime': task_max_lifetime,
+        }
+
+def spawn_worker(self, **options):
+    remaining_seconds = next(self.context['lifetime_getter'])
 
     command_argv = [
         'celery',
@@ -87,25 +116,6 @@ def spawn_worker(task_max_lifetime=300-15-30, softlimit=30, hardlimit=15, lifeti
         return e
     raise RuntimeError('Is the worker left running?')
 
-
-def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args, **kwargs):
-    """
-    Sets an alarm via Unix SIGALRM up to 'seconds' ahead.
-    Then calls the 'callback'.
-    Only ONE alarm can exist at a time. If this function is called multiple times, only the
-    last call remains active.
-    """
-    if reason:
-        reason = 'waiting for "%s"' % reason
-    logger.debug('Registering an ALRM for %.2f seconds ahead %s', delay, reason)
-    signal.signal(signal.SIGALRM, callback)
-    signal.setitimer(signal.ITIMER_REAL, delay)
-
-
-def cancel_wakeme():
-    """Disables the actual Unix SIGALRM set, if any"""
-    signal.signal(signal.SIGALRM, signal.SIG_DFL)   # Play safe
-    signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
 
 
 def _shutdown_worker(context):
