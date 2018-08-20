@@ -6,5 +6,4 @@ botocore~=1.10.41
 aioboto3~=4.0.1
 future-thread~=1.0
 backoff~=1.5
-dirtyjson~=1.0.7
 timeoutcontext==1.2.0

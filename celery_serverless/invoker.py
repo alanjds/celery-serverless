@@ -9,7 +9,6 @@ import json
 import multiprocessing
 from pprint import pformat
 
-import dirtyjson
 import click
 from future_thread import Future as FutureThread
 
@@ -132,9 +131,9 @@ class Invoker(object):
             error = RuntimeError('Invocation failed on Serverless: %s' % command)
 
             try:
-                details = dirtyjson.loads(output)
-            except ValueError:  # No JSON in the output
-                details = {}
+                details = json.loads(output)
+            except Exception:  # No JSON in the output
+                details = output
 
             if isinstance(details, dict):
                 details = dict(details)
