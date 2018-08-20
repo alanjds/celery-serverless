@@ -1,11 +1,11 @@
 click~=6.7
-celery~=4.2.0
-ruamel.yaml~=0.15.37
-boto3~=1.7.6
-botocore~=1.10.41
-aioboto3~=4.0.1
+celery==4.2.1
+ruamel.yaml==0.15.60
+boto3==1.7.80
+botocore==1.10.80
+aioboto3==4.0.2
 future-thread~=1.0
-backoff~=1.5
+backoff==1.6.0
 redlock~=1.2.0
 dirtyjson~=1.0.7
 timeoutcontext==1.2.0
