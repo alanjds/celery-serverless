@@ -3,6 +3,7 @@ import os
 import uuid
 import signal
 import logging
+from datetime import timedelta, datetime
 
 import celery.bin.celery
 import celery.worker.state
@@ -63,8 +64,6 @@ def remaining_lifetime_getter(lambda_context=None) -> 'float':
     Generates the remaining lifetime of this Lambda in seconds,
     given a 'lambda_context'
     """
-    from datetime import timedelta, datetime
-
     starting_time = datetime.now()
     try:
         initial_remaining_millis = lambda_context.get_remaining_time_in_millis()
