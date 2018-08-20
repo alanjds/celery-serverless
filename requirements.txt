@@ -5,7 +5,7 @@ boto3==1.7.80
 botocore==1.10.80
 aioboto3==4.0.2
 future-thread~=1.0
-backoff~=1.5
+backoff==1.6.0
 redlock~=1.2.0
 dirtyjson~=1.0.7
 timeoutcontext==1.2.0
