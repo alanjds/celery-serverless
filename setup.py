@@ -16,7 +16,6 @@ requirements = [
     'dirtyjson==1.0.7',
     'future-thread~=1.0',
     'backoff>=1.5.0',
-    'redlock>=1.2.0',
     'timeoutcontext>=1.2.0',
 ]
 
