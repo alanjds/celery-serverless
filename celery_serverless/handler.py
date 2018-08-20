@@ -22,9 +22,9 @@ from redis.lock import LockError
 from timeoutcontext import timeout as timeout_context
 from celery_serverless.invoker import invoke_watchdog
 from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock
-from celery_serverless.worker_management import (spawn_worker, attach_hooks, set_worker_metadata,
-                                                 remaining_lifetime_getter)
-hooks = []
+from celery_serverless.worker_management import WorkerRunner, remaining_lifetime_getter
+
+_worker_runner = WorkerRunner()
 
 
 @handler_wrapper
@@ -34,21 +34,19 @@ def worker(event, context, intercom_url=None):
 
     logger.debug('Event: %s', event)
 
-    set_worker_metadata(intercom_url=intercom_url, worker_metadata=event or {})
+    _worker_runner.lifetime_getter = remaining_lifetime_getter(context)
+    _worker_runner.set_worker_metadata(intercom_url=intercom_url, worker_metadata=event or {})
 
-    if not hooks:
+    if not _worker_runner.hooks:
         logger.debug('Fresh Celery worker. Attach hooks!')
-        hooks = attach_hooks()
+        _worker_runner.attach_hooks()
     else:
         logger.debug('Old Celery worker. Already have hooks.')
 
     # The Celery worker will start here. Will connect, take 1 (one) task,
     # process it, and quit.
     logger.debug('Spawning the worker(s)')
-    spawn_worker(
-        loglevel='DEBUG',
-        lifetime_getter=remaining_lifetime_getter(context),
-    )  # Will block until one task got processed
+    _worker_runner.run_worker(loglevel='DEBUG')  # Will block until at least one task got processed
 
     logger.debug('Cleaning up before exit')
     body = {

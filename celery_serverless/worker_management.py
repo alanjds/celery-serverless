@@ -78,10 +78,9 @@ class WorkerRunner(object):
     # Sometime it will change to a Thread or Async aware thing
     worker = None
 
-    def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15, lifetime_getter:'callable'=None):
+    def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15):
         self._softlimit = softlimit
         self._hardlimit = hardlimit
-        self._lifetime_getter = lifetime_getter
         self._task_max_lifetime = task_max_lifetime
         self._intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
 
@@ -265,8 +264,8 @@ class WorkerRunner(object):
                 _set_job_watchdog()
 
         # Using weak references. Is up to the caller to clear the callbacks produced
-        self._hooks = [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success]
-        return self._hooks
+        self.hooks = [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success]
+        return self.hooks
 
     def _demand_shutdown(self, *args, **kwargs):
         worker = self._worker
