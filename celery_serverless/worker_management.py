@@ -78,16 +78,16 @@ class WorkerRunner(object):
     # Sometime it will change to a Thread or Async aware thing
     worker = None
     hooks = None  # type: list
-    lifetime_getter = None  # type: callable
+    lifetime_getter = lambda: 5*60
+    _intercom_url = None  # type: str
 
     def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15):
         self._softlimit = softlimit
         self._hardlimit = hardlimit
         self._task_max_lifetime = task_max_lifetime
-        self._intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
 
     def run_worker(self, **options):
-        remaining_seconds = next(self.lifetime_getter) if self.lifetime_getter else 5*60
+        remaining_seconds = next(self.lifetime_getter)
 
         command_argv = [
             'celery',
@@ -150,8 +150,8 @@ class WorkerRunner(object):
         return self._task_max_lifetime > self.lifetime_getter()
 
     def set_worker_metadata(self, intercom_url='', worker_metadata=None):
-        intercom_url = intercom_url or self._intercom_url
-        assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+        self._intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+        assert self._intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
 
         worker_metadata = worker_metadata or {
             'worker_id': uuid.uuid1(),
