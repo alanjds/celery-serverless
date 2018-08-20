@@ -37,10 +37,9 @@ def _get_options_from_environ():
 
 def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args, **kwargs):
     """
-    Sets an alarm via Unix SIGALRM up to 'seconds' ahead.
-    Then calls the 'callback'.
-    Only ONE alarm can exist at a time. If this function is called multiple times, only the
-    last call remains active.
+    Sets an alarm via Unix SIGALRM up to 'seconds' ahead. Then calls the 'callback'.
+    Beware that ONLY ONE alarm can exist at a time. This is how Unix works.
+    If this function is called multiple times, only the last call remains active.
     """
     if reason:
         reason = 'waiting for "%s"' % reason
