@@ -14,6 +14,7 @@ requirements = [
     'celery~=4.2.0',
     'ruamel.yaml~=0.15.37',
     'future-thread~=1.0',
+    'redis>=2.10.6',
     'backoff>=1.5.0',
     'timeoutcontext>=1.2.0',
 ]
