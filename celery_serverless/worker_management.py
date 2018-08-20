@@ -194,7 +194,7 @@ class WorkerSpawner(object):
             def _maybe_shutdown(*args, **kwargs):
                 assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
                 logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
-                _shutdown_worker(self.context)
+                self._shutdown_worker()
 
             # Set shutdown signal in case we don't connect in wait_connection seconds
             wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
@@ -265,22 +265,23 @@ class WorkerSpawner(object):
 
             if self.is_time_up():
                 logger.info('No time for another job. Now shutdown! [task_postrun]')
-                _demand_shutdown(*args, **kwargs)
+                self._demand_shutdown(*args, **kwargs)
             else:
                 logger.info('There is still time for another job. Keep fetching! [task_postrun]')
                 _set_job_watchdog()
 
-        def _demand_shutdown(*args, **kwargs):
-            worker = self.context['worker']
+        # Using weak references. Is up to the caller to clear the callbacks produced
+        self._hooks = [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success]
+        return self._hooks
 
-            # Hack around "Worker shutdown creates duplicate messages in SQS broker"
-            # (applies to any broker but 'amqp', if I understand correctly)
-            # Celery issue #4002
-            # See: https://github.com/celery/celery/issues/4002#issuecomment-377111157
-            # See: https://gist.github.com/lovemyliwu/af5112de25b594205a76c3bfd00b9340
-            worker.consumer.connection._default_channel.do_restore = False
+    def _demand_shutdown(self, *args, **kwargs):
+        worker = self.context['worker']
 
-            _shutdown_worker(context)
+        # Hack around "Worker shutdown creates duplicate messages in SQS broker"
+        # (applies to any broker but 'amqp', if I understand correctly)
+        # Celery issue #4002
+        # See: https://github.com/celery/celery/issues/4002#issuecomment-377111157
+        # See: https://gist.github.com/lovemyliwu/af5112de25b594205a76c3bfd00b9340
+        worker.consumer.connection._default_channel.do_restore = False
 
-        # Using weak references. Is up to the caller to store the callbacks produced
-        return [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _demand_shutdown]
+        self._shutdown_worker()
