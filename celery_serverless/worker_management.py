@@ -81,20 +81,44 @@ def remaining_lifetime_getter(lambda_context=None) -> 'float':
 
 
 class WorkerRunner(object):
-    # To store the Worker instance.
-    # Sometime it will change to a Thread or Async aware thing
-    worker = None
-    hooks = None  # type: list
-    lifetime_getter = lambda: 5*60
-    is_shutting_down = False
-    _intercom_url = None  # type: str
+    def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15,
+                 intercom_url='', lambda_context=None, worker_metadata=None):
+        # To store the Worker instance.
+        # Sometime it will change to a Thread or Async aware thing
+        self.worker = None
 
-    def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15):
+        self.hooks = None  # type: list
+        self.is_shutting_down = False
+        self.lifetime_getter = lambda: next(remaining_lifetime_getter(lambda_context))
+
         self._softlimit = softlimit
         self._hardlimit = hardlimit
         self._task_max_lifetime = task_max_lifetime
 
+        self._intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+        assert self._intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+
+        worker_metadata = worker_metadata or {
+            'worker_id': uuid.uuid1(),
+            'prefix': '(undefined)',
+        }
+
+        self._watchdog_context = {
+            'intercom': watchdog.build_intercom(intercom_url),
+            'worker_metadata': worker_metadata,
+            'worker_id': worker_metadata['worker_id'],
+            'prefix': worker_metadata['prefix'],
+        }
+        logger.debug("Event -> _watchdog_context: %s", self._watchdog_context)
+
+
     def run_worker(self, **options):
+        if not self.hooks:
+            logger.debug('Fresh worker instance. Attach hooks!')
+            self.attach_hooks()
+        else:
+            logger.debug('Old worker instance. Already have hooks.')
+
         remaining_seconds = self.lifetime_getter()
 
         command_argv = [
@@ -157,23 +181,6 @@ class WorkerRunner(object):
         Will a new task fail if it uses the whole task_max_lifetime?
         """
         return self._task_max_lifetime > self.lifetime_getter()
-
-    def set_worker_metadata(self, intercom_url='', worker_metadata=None):
-        self._intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
-        assert self._intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
-
-        worker_metadata = worker_metadata or {
-            'worker_id': uuid.uuid1(),
-            'prefix': '(undefined)',
-        }
-
-        self._watchdog_context = {
-            'intercom': watchdog.build_intercom(intercom_url),
-            'worker_metadata': worker_metadata,
-            'worker_id': worker_metadata['worker_id'],
-            'prefix': worker_metadata['prefix'],
-        }
-        logger.debug("Event -> _watchdog_context: %s", self._watchdog_context)
 
     def attach_hooks(self, wait_connection=8.0, wait_job=4.0):
         """

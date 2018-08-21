@@ -28,20 +28,9 @@ from celery_serverless.worker_management import WorkerRunner, remaining_lifetime
 @handler_wrapper
 def worker(event, context, intercom_url=None):
     event = event or {}
-
     logger.debug('Event: %s', event)
 
-    lifetime_generator = remaining_lifetime_getter(context)
-
-    _worker_runner = WorkerRunner()
-    _worker_runner.lifetime_getter = lambda: next(lifetime_generator)
-    _worker_runner.set_worker_metadata(intercom_url=intercom_url, worker_metadata=event or {})
-
-    if not _worker_runner.hooks:
-        logger.debug('Fresh Celery worker. Attach hooks!')
-        _worker_runner.attach_hooks()
-    else:
-        logger.debug('Old Celery worker. Already have hooks.')
+    _worker_runner = WorkerRunner(intercom_url=intercom_url, lambda_context=context, worker_metadata=event)
 
     # The Celery worker will start here. Will connect, take 1 (one) task,
     # process it, and quit.
