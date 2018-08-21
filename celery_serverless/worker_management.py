@@ -65,10 +65,17 @@ def remaining_lifetime_getter(lambda_context=None) -> 'float':
     except Exception as e:
         logger.exception('Could not get remaining_seconds. Is the context right?')
         initial_remaining_millis = 5 * 60 * 1000 # 5 minutes by default
+    logger.debug('Initial remaining time: %s ms.', initial_remaining_millis)
+
     ending_time = starting_time + timedelta(milliseconds=initial_remaining_millis)
+    logger.debug(
+        'Ending time: %s (starting + delta -> %s + %s)',
+        ending_time, starting_time,
+        timedelta(milliseconds=initial_remaining_millis).total_seconds()
+    )
 
     while True:
-        remaining_seconds = (ending_time - datetime.now()).seconds
+        remaining_seconds = (ending_time - datetime.now()).total_seconds()
         logger.info('Remaining time calculated: %s sec.', remaining_seconds)
         yield remaining_seconds
 
