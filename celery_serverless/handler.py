@@ -33,7 +33,8 @@ def worker(event, context, intercom_url=None):
 
     logger.debug('Event: %s', event)
 
-    _worker_runner.lifetime_getter = remaining_lifetime_getter(context)
+    lifetime_generator = remaining_lifetime_getter(context)
+    _worker_runner.lifetime_getter = lambda: next(lifetime_generator)
     _worker_runner.set_worker_metadata(intercom_url=intercom_url, worker_metadata=event or {})
 
     if not _worker_runner.hooks:

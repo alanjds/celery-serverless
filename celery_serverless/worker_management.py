@@ -87,7 +87,7 @@ class WorkerRunner(object):
         self._task_max_lifetime = task_max_lifetime
 
     def run_worker(self, **options):
-        remaining_seconds = next(self.lifetime_getter)
+        remaining_seconds = self.lifetime_getter()
 
         command_argv = [
             'celery',
