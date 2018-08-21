@@ -81,13 +81,13 @@ def remaining_lifetime_getter(lambda_context=None) -> 'float':
 
 
 class WorkerRunner(object):
+    hooks = []
+
     def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15,
                  intercom_url='', lambda_context=None, worker_metadata=None):
         # To store the Worker instance.
         # Sometime it will change to a Thread or Async aware thing
         self.worker = None
-
-        self.hooks = None  # type: list
         self.is_shutting_down = False
         self.lifetime_getter = lambda: next(remaining_lifetime_getter(lambda_context))
 
@@ -113,12 +113,7 @@ class WorkerRunner(object):
 
 
     def run_worker(self, **options):
-        if not self.hooks:
-            logger.debug('Fresh worker instance. Attach hooks!')
-            self.attach_hooks()
-        else:
-            logger.debug('Old worker instance. Already have hooks.')
-
+        self.maybe_attach_hooks()
         remaining_seconds = self.lifetime_getter()
 
         command_argv = [
@@ -182,7 +177,7 @@ class WorkerRunner(object):
         """
         return self._task_max_lifetime > self.lifetime_getter()
 
-    def attach_hooks(self, wait_connection=8.0, wait_job=4.0):
+    def maybe_attach_hooks(self, wait_connection=8.0, wait_job=4.0):
         """
         Register the needed hooks:
         - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
@@ -192,6 +187,11 @@ class WorkerRunner(object):
         - Finished a job, set an alarm for shutdown, allowing Task to acknowledge()
         - If a new task comes after the 1st processed, reject and shutdown.
         """
+        if self.hooks:
+            logger.debug('Old worker instance. Already have hooks.')
+            return self.hooks
+        logger.debug('Fresh worker instance. Attach hooks!')
+
         logger.info('Attaching Celery hooks')
         logger.debug('Wait connection time: %.2f', wait_connection)
         logger.debug('Wait job time: %.2f', wait_job)
@@ -285,7 +285,7 @@ class WorkerRunner(object):
                 _set_job_watchdog()
 
         # Using weak references. Is up to the caller to clear the callbacks produced
-        self.hooks = [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _consider_a_shutdown]
+        self.hooks.extend([_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _consider_a_shutdown])
         return self.hooks
 
     def _demand_shutdown(self, *args, **kwargs):
