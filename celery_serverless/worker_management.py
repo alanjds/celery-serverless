@@ -79,6 +79,7 @@ class WorkerRunner(object):
     worker = None
     hooks = None  # type: list
     lifetime_getter = lambda: 5*60
+    is_shutting_down = False
     _intercom_url = None  # type: str
 
     def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15):
@@ -246,11 +247,14 @@ class WorkerRunner(object):
         @task_success.connect
         def _ack_success(sender=None, *args, **kwargs):
             task = sender
-            logger.info('Job done. Stop receiving new messages avoiding Kombu prefetch. [task_success]')
+            logger.info('Job done. Consider stop receiving new messages avoiding Kombu prefetch. [task_success]')
 
             worker = self._worker  # TODO: Get the list of queues.
-            worker.consumer.cancel_task_queue('celery')  # Manually, to prevent the next line to receive a new task
-            task._original_request.message.ack()  # Manually, as WorkerShutdown() will redeliver current message
+            if self.is_time_up():
+                self.is_shutting_down = True
+                logger.info('No time for another job. Stop listening the queue! [task_success]')
+                worker.consumer.cancel_task_queue('celery')  # Manually, to prevent the next line to receive a new task
+                task._original_request.message.ack()  # Manually, as WorkerShutdown() will redeliver current message
 
         @task_postrun.connect  # Task finished
         def _consider_a_shutdown(*args, **kwargs):
@@ -258,7 +262,7 @@ class WorkerRunner(object):
             worker.__task_finished = True
             logger.info('Job done. Is there time for one more? [task_postrun]')
 
-            if self.is_time_up():
+            if self.is_shutting_down:
                 logger.info('No time for another job. Now shutdown! [task_postrun]')
                 self._demand_shutdown(*args, **kwargs)
             else:
