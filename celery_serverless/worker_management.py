@@ -149,6 +149,7 @@ class WorkerRunner(object):
             watchdog_context['worker_id'],
             prefix=watchdog_context['prefix'],
         )
+        self.is_shutting_down = False
         raise WorkerShutdown()
 
     def is_time_up(self):
