@@ -24,8 +24,6 @@ from celery_serverless.invoker import invoke_watchdog
 from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock
 from celery_serverless.worker_management import WorkerRunner, remaining_lifetime_getter
 
-_worker_runner = WorkerRunner()
-
 
 @handler_wrapper
 def worker(event, context, intercom_url=None):
@@ -34,6 +32,8 @@ def worker(event, context, intercom_url=None):
     logger.debug('Event: %s', event)
 
     lifetime_generator = remaining_lifetime_getter(context)
+
+    _worker_runner = WorkerRunner()
     _worker_runner.lifetime_getter = lambda: next(lifetime_generator)
     _worker_runner.set_worker_metadata(intercom_url=intercom_url, worker_metadata=event or {})
 
