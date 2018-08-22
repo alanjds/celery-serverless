@@ -55,7 +55,7 @@ def get_syslog_handler(logdrain_url:str):
     return handler
 
 
-def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logformat):
+def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logformat, redirect_stdout=True):
     if logdrain_url.startswith('syslog'):
         handler = get_syslog_handler(logdrain_url)
     else:
@@ -66,4 +66,23 @@ def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logform
         handler.setFormatter(formatter)
 
     setup_logging(handler, exclude=[])  # Sentry made it so easy! Thanks S2
+
+    if redirect_stdout:
+        sys._original_stdout = sys.stdout
+        stdout_logger = logging.getLogger('_stdout')
+        sys.stdout = StreamToLogger(stdout_logger)
+
+        sys._original_stderr = sys.stderr
+        stderr_logger = logging.getLogger('_stderr')
+        sys.stderr = StreamToLogger(stderr_logger)
+
     return handler
+
+
+class StreamToLogger(object):
+    def __init__(self, logger):
+        self.logger = logger
+
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            self.logger.debug(line.rstrip())
