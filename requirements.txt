@@ -2,7 +2,7 @@ click~=6.7
 celery~=4.2.0
 ruamel.yaml~=0.15.37
 boto3~=1.7.6
-botocore~=1.10.41
+botocore==1.10.81
 aioboto3==4.0.2
 future-thread~=1.0
 redis~=2.10.6
