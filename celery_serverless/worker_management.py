@@ -73,6 +73,7 @@ def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
     try:
         celery.bin.celery.main(command_argv)  # Will block until worker dies.
     except SystemExit as e:  # Worker is dead.
+        logger.debug('Caught a SystemExit.')
         state = celery.worker.state
         state.should_stop = False
         state.should_terminate = False
@@ -111,7 +112,25 @@ def _shutdown_worker(context):
     raise WorkerShutdown()
 
 
-def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url='', worker_metadata=None):
+def set_worker_metadata(intercom_url='', worker_metadata=None):
+    intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+    assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+
+    worker_metadata = worker_metadata or {
+        'worker_id': uuid.uuid1(),
+        'prefix': '(undefined)',
+    }
+
+    context['worker_watchdog'] = {
+        'intercom': watchdog.build_intercom(intercom_url),
+        'worker_metadata': worker_metadata,
+        'worker_id': worker_metadata['worker_id'],
+        'prefix': worker_metadata['prefix'],
+    }
+    logger.debug("Event -> context[worker_watchdog]: %s", context['worker_watchdog'])
+
+
+def attach_hooks(wait_connection=8.0, wait_job=4.0):
     """
     Register the needed hooks:
     - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
@@ -124,20 +143,6 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0, intercom_url='', worker_meta
     logger.info('Attaching Celery hooks')
     logger.debug('Wait connection time: %.2f', wait_connection)
     logger.debug('Wait job time: %.2f', wait_job)
-
-    intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
-    worker_metadata = worker_metadata or {
-        'worker_id': uuid.uuid1(),
-        'prefix': '(undefined)',
-    }
-    assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
-
-    context['worker_watchdog'] = {
-        'intercom': watchdog.build_intercom(intercom_url),
-        'worker_metadata': worker_metadata,
-        'worker_id': worker_metadata['worker_id'],
-        'prefix': worker_metadata['prefix'],
-    }
 
     @celeryd_init.connect  # After worker process up
     def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):

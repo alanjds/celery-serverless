@@ -35,8 +35,8 @@ from .utils import run_aio_on_thread, get_client_lock
 
 
 CELERY_HANDLER_PATHS = {
-    'worker': 'celery_serverless.handler_worker',
-    'watchdog': 'celery_serverless.handler_watchdog',
+    'worker': 'celery_serverless_handler.handler_worker',
+    'watchdog': 'celery_serverless_handler.handler_watchdog',
 }
 
 
