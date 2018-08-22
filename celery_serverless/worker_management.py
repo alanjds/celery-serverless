@@ -76,7 +76,7 @@ def remaining_lifetime_getter(lambda_context=None) -> 'float':
 
     while True:
         remaining_seconds = (ending_time - datetime.now(timezone.utc)).total_seconds()
-        logger.info('Remaining time calculated: %s sec.', remaining_seconds)
+        logger.info('Remaining time calculated: %.2f sec.', remaining_seconds)
         yield remaining_seconds
 
 
@@ -88,8 +88,10 @@ class WorkerRunner(object):
         # To store the Worker instance.
         # Sometime it will change to a Thread or Async aware thing
         self.worker = None
+
+        _lifetime_generator = remaining_lifetime_getter(lambda_context)
+        self.lifetime_getter = lambda: next(_lifetime_generator)
         self.is_shutting_down = False
-        self.lifetime_getter = lambda: next(remaining_lifetime_getter(lambda_context))
 
         self._softlimit = softlimit
         self._hardlimit = hardlimit
