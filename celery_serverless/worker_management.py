@@ -220,8 +220,10 @@ class WorkerRunner(object):
         def _set_job_watchdog(sender=None, *args, **kwargs):
             # assert context['worker'] == sender.controller, 'Oops: Are the CONTEXT messed?'
             worker = self._worker
-            worker.__broker_connected = True
-            logger.debug('Connected to the broker! [worker_ready]')
+
+            if sender:
+                worker.__broker_connected = True
+                logger.debug('Connected to the broker! [worker_ready]')
 
             worker.__task_received = False
             worker.__task_finished = False
@@ -275,7 +277,6 @@ class WorkerRunner(object):
         def _consider_a_shutdown(*args, **kwargs):
             worker = self._worker
             worker.__task_finished = True
-            logger.info('Job done. Is there time for one more? [task_postrun]')
 
             if self.is_shutting_down:
                 logger.info('No time for another job. Now shutdown! [task_postrun]')
