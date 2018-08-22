@@ -81,6 +81,7 @@ def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logform
     return handler
 
 
+# See: https://github.com/iopipe/iopipe-python/blob/662dca0aa3bccf8a77e9a64b2b6bf87f558f2a84/iopipe/contrib/logger/plugin.py#L70
 class StreamToLogger(object):
     def __init__(self, logger, print_to=None):
         self.logger = logger
