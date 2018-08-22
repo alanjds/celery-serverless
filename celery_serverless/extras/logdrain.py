@@ -72,19 +72,22 @@ def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logform
 
         sys._original_stdout = sys.stdout
         stdout_logger = logging.getLogger('_stdout')
-        sys.stdout = StreamToLogger(stdout_logger)
+        sys.stdout = StreamToLogger(stdout_logger, print_to=sys._original_stdout)
 
         sys._original_stderr = sys.stderr
         stderr_logger = logging.getLogger('_stderr')
-        sys.stderr = StreamToLogger(stderr_logger)
+        sys.stderr = StreamToLogger(stderr_logger, print_to=sys._original_stderr)
 
     return handler
 
 
 class StreamToLogger(object):
-    def __init__(self, logger):
+    def __init__(self, logger, print_to=None):
         self.logger = logger
+        self.print_to = print_to
 
     def write(self, buf):
         for line in buf.rstrip().splitlines():
+            if self.print_to:
+                print(line, file=self.print_to)
             self.logger.debug(line.rstrip())
