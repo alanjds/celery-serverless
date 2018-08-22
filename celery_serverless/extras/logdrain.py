@@ -68,6 +68,8 @@ def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logform
     setup_logging(handler, exclude=[])  # Sentry made it so easy! Thanks S2
 
     if redirect_stdout:
+        logging.debug('Installing _stdout logging redirection')
+
         sys._original_stdout = sys.stdout
         stdout_logger = logging.getLogger('_stdout')
         sys.stdout = StreamToLogger(stdout_logger)
