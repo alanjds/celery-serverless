@@ -61,7 +61,8 @@ def watchdog(event, context):
     if queue_url == 'disabled':
         watched = None
     else:
-        watched = KombuQueueLengther(queue_url, 'celery')   # TODO: Allow queue name to be chosen
+        queue_names = os.environ.get('CELERY_SERVERLESS_QUEUES', 'celery')
+        watched = KombuQueueLengther(queue_url, queue_names)   # TODO: Allow many queues at once
 
     watchdog = Watchdog(communicator=build_intercom(intercom_url), name=lock_name, lock=lock, watched=watched)
 
