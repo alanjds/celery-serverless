@@ -30,7 +30,11 @@ def worker(event, context, intercom_url=None):
     event = event or {}
     logger.debug('Event: %s', event)
 
-    _worker_runner = WorkerRunner(intercom_url=intercom_url, lambda_context=context, worker_metadata=event)
+    queue_names = os.environ.get('CELERY_SERVERLESS_QUEUES', 'celery')
+    _worker_runner = WorkerRunner(
+        intercom_url=intercom_url, lambda_context=context,
+        worker_metadata=event, queues=queue_names,
+    )
 
     # The Celery worker will start here. Will connect, take 1 (one) task,
     # process it, and quit.
