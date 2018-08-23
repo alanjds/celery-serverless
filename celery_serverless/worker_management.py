@@ -91,6 +91,7 @@ class WorkerRunner(object):
         self.worker = None
         WorkerRunner._current_runner = self
 
+        _lifetime_generator = remaining_lifetime_getter(lambda_context)
         self.lifetime_getter = lambda: next(_lifetime_generator)
         self.is_shutting_down = False
 
