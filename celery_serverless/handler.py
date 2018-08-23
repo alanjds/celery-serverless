@@ -22,42 +22,20 @@ from redis.lock import LockError
 from timeoutcontext import timeout as timeout_context
 from celery_serverless.invoker import invoke_watchdog
 from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock
-from celery_serverless.worker_management import spawn_worker, attach_hooks, set_worker_metadata
-hooks = []
+from celery_serverless.worker_management import WorkerRunner, remaining_lifetime_getter
 
 
 @handler_wrapper
 def worker(event, context, intercom_url=None):
-    global hooks
     event = event or {}
-
-    try:
-        remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
-    except Exception as e:
-        logger.exception('Could not get remaining_seconds. Is the context right?')
-        remaining_seconds = 5 * 60 # 5 minutes by default
-
-    softlimit = remaining_seconds-30.0  # Poke the job 30sec before the abyss
-    hardlimit = remaining_seconds-15.0  # Kill the job 15sec before the abyss
-
     logger.debug('Event: %s', event)
 
-    set_worker_metadata(intercom_url=intercom_url, worker_metadata=event or {})
-
-    if not hooks:
-        logger.debug('Fresh Celery worker. Attach hooks!')
-        hooks = attach_hooks()
-    else:
-        logger.debug('Old Celery worker. Already have hooks.')
+    _worker_runner = WorkerRunner(intercom_url=intercom_url, lambda_context=context, worker_metadata=event)
 
     # The Celery worker will start here. Will connect, take 1 (one) task,
     # process it, and quit.
     logger.debug('Spawning the worker(s)')
-    spawn_worker(
-        softlimit=softlimit if softlimit > 5 else None,
-        hardlimit=hardlimit if hardlimit > 5 else None,
-        loglevel='DEBUG',
-    )  # Will block until one task got processed
+    _worker_runner.run_worker(loglevel='DEBUG')  # Will block until at least one task got processed
 
     logger.debug('Cleaning up before exit')
     body = {

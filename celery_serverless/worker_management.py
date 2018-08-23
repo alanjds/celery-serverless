@@ -3,6 +3,7 @@ import os
 import uuid
 import signal
 import logging
+from datetime import timedelta, datetime, timezone
 
 import celery.bin.celery
 import celery.worker.state
@@ -14,10 +15,6 @@ from celery_serverless import watchdog
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
-
-# To store the Worker instance.
-# Sometime it will change to a Thread or Async aware thing
-context = {}
 
 
 class PatchedRequest(celery.worker.request.Request):
@@ -38,55 +35,11 @@ def _get_options_from_environ():
             yield (k,v)
 
 
-def spawn_worker(softlimit:'seconds'=None, hardlimit:'seconds'=None, **options):
-    command_argv = [
-        'celery',
-        'worker',
-        # '--app', 'project',
-        '--concurrency', '1',
-        '--prefetch-multiplier', '1',
-        '--without-gossip',
-        '--without-mingle',
-        '--task-events',
-        '-O', 'fair',
-        '-P', 'solo',
-    ]
-
-    if softlimit:
-        command_argv.extend(['--soft-time-limit', '%s' % softlimit])
-    if hardlimit:
-        command_argv.extend(['--time-limit', '%s' % hardlimit])
-
-    options.update(dict(_get_options_from_environ()))
-    for k, v in options.items():
-        if len(k) == 1:
-            option = '-%s' % k.lower()
-        else:
-            option = '--%s' % k.lower()
-        command_argv.append(option)
-
-        if v:
-            command_argv.append('%s' % v)
-
-    logger.info('Starting the worker(s)')
-    logger.debug('Command: %s', ' '.join(command_argv))
-    try:
-        celery.bin.celery.main(command_argv)  # Will block until worker dies.
-    except SystemExit as e:  # Worker is dead.
-        logger.debug('Caught a SystemExit.')
-        state = celery.worker.state
-        state.should_stop = False
-        state.should_terminate = False
-        return e
-    raise RuntimeError('Is the worker left running?')
-
-
 def wakeme_soon(callback:'callable'=None, delay:'seconds'=1.0, reason='', *args, **kwargs):
     """
-    Sets an alarm via Unix SIGALRM up to 'seconds' ahead.
-    Then calls the 'callback'.
-    Only ONE alarm can exist at a time. If this function is called multiple times, only the
-    last call remains active.
+    Sets an alarm via Unix SIGALRM up to 'seconds' ahead. Then calls the 'callback'.
+    Beware that ONLY ONE alarm can exist at a time. This is how Unix works.
+    If this function is called multiple times, only the last call remains active.
     """
     if reason:
         reason = 'waiting for "%s"' % reason
@@ -101,126 +54,245 @@ def cancel_wakeme():
     signal.setitimer(signal.ITIMER_REAL, 0)  # Disables the timer
 
 
-def _shutdown_worker(context):
-    # Inform the Watchdog Monitor [leave]
-    watchdog_context = context['worker_watchdog']
-    watchdog.inform_worker_leave(
-        watchdog_context['intercom'],
-        watchdog_context['worker_id'],
-        prefix=watchdog_context['prefix'],
+def remaining_lifetime_getter(lambda_context=None) -> 'float':
+    """
+    Generates the remaining lifetime of this Lambda in seconds,
+    given a 'lambda_context'
+    """
+    starting_time = datetime.now(timezone.utc)
+    try:
+        initial_remaining_millis = lambda_context.get_remaining_time_in_millis()
+    except Exception as e:
+        logger.exception('Could not get remaining_seconds. Is the context right?')
+        initial_remaining_millis = 5 * 60 * 1000 # 5 minutes by default
+    logger.debug('Initial remaining time: %s ms.', initial_remaining_millis)
+
+    ending_time = starting_time + timedelta(milliseconds=initial_remaining_millis)
+    logger.debug(
+        'Ending time: %s (starting + delta -> %s + %s)',
+        ending_time, starting_time,
+        timedelta(milliseconds=initial_remaining_millis).total_seconds()
     )
-    raise WorkerShutdown()
+
+    while True:
+        remaining_seconds = (ending_time - datetime.now(timezone.utc)).total_seconds()
+        logger.info('Remaining time calculated: %.2f sec.', remaining_seconds)
+        yield remaining_seconds
 
 
-def set_worker_metadata(intercom_url='', worker_metadata=None):
-    intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
-    assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+class WorkerRunner(object):
+    hooks = []
 
-    worker_metadata = worker_metadata or {
-        'worker_id': uuid.uuid1(),
-        'prefix': '(undefined)',
-    }
+    def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15,
+                 intercom_url='', lambda_context=None, worker_metadata=None):
+        # To store the Worker instance.
+        # Sometime it will change to a Thread or Async aware thing
+        self.worker = None
 
-    context['worker_watchdog'] = {
-        'intercom': watchdog.build_intercom(intercom_url),
-        'worker_metadata': worker_metadata,
-        'worker_id': worker_metadata['worker_id'],
-        'prefix': worker_metadata['prefix'],
-    }
-    logger.debug("Event -> context[worker_watchdog]: %s", context['worker_watchdog'])
+        _lifetime_generator = remaining_lifetime_getter(lambda_context)
+        self.lifetime_getter = lambda: next(_lifetime_generator)
+        self.is_shutting_down = False
+
+        self._softlimit = softlimit
+        self._hardlimit = hardlimit
+        self._task_max_lifetime = task_max_lifetime
+
+        self._intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
+        assert self._intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+
+        worker_metadata = worker_metadata or {
+            'worker_id': uuid.uuid1(),
+            'prefix': '(undefined)',
+        }
+
+        self._watchdog_context = {
+            'intercom': watchdog.build_intercom(intercom_url),
+            'worker_metadata': worker_metadata,
+            'worker_id': worker_metadata['worker_id'],
+            'prefix': worker_metadata['prefix'],
+        }
+        logger.debug("Event -> _watchdog_context: %s", self._watchdog_context)
 
 
-def attach_hooks(wait_connection=8.0, wait_job=4.0):
-    """
-    Register the needed hooks:
-    - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
-    - After broker connected, shutdown if cannot receive a job within 'wait_job'
-      This safeguards against empty queues too.
-    - Receiving a job, clears the watchdogs.
-    - Finished a job, set an alarm for shutdown, allowing Task to acknowledge()
-    - If a new task comes after the 1st processed, reject and shutdown.
-    """
-    logger.info('Attaching Celery hooks')
-    logger.debug('Wait connection time: %.2f', wait_connection)
-    logger.debug('Wait job time: %.2f', wait_job)
+    def run_worker(self, **options):
+        self.maybe_attach_hooks()
+        remaining_seconds = self.lifetime_getter()
 
-    @celeryd_init.connect  # After worker process up
-    def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
-        logger.debug('Connecting to the broker [celeryd_init]')
-        context['worker'] = worker = instance
+        command_argv = [
+            'celery',
+            'worker',
+            # '--app', 'project',
+            '--concurrency', '1',
+            '--prefetch-multiplier', '1',
+            '--without-gossip',
+            '--without-mingle',
+            '--task-events',
+            '-O', 'fair',
+            '-P', 'solo',
+        ]
 
-        worker.__broker_connected = False
-        def _maybe_shutdown(*args, **kwargs):
-            assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
-            logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
-            _shutdown_worker(context)
+        softlimit = remaining_seconds-self._softlimit  # Poke the job 30sec before the abyss
+        if softlimit > 5:  # At least 5 sec.
+            command_argv.extend(['--soft-time-limit', '%s' % softlimit])
 
-        # Set shutdown signal in case we don't connect in wait_connection seconds
-        wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
+        hardlimit = remaining_seconds-self._hardlimit  # Kill the job 15sec before the abyss
+        if hardlimit > 5:  # At least 5 sec.
+            command_argv.extend(['--time-limit', '%s' % hardlimit])
 
-    # #######
-    # @worker_init.connect  # Before connecting, if -P solo
-    # def _worker_init(sender=None, *args, **kwargs):
-    #     logger.debug('Connecting to the broker [worker_init]')
-    # #######
-
-    @worker_ready.connect  # After broker queue connected
-    def _set_job_watchdog(sender=None, *args, **kwargs):
-        assert context['worker'] == sender.controller, 'Oops: Are the CONTEXT messed?'
-        worker = context['worker']
-        worker.__broker_connected = True
-        logger.debug('Connected to the broker! [worker_ready]')
-
-        worker.__task_received = False
-        worker.__task_finished = False
-
-        # HACK: (Re)start to listen the queue. Could had been silenced before.
-        worker.consumer.add_task_queue('celery')  # TODO: Select the queue dynamically
-
-        def _maybe_shutdown(*args, **kwargs):
-            if worker.__task_received:
-                logger.debug('Keep going. Task received [callback:worker_ready]')
+        options.update(dict(_get_options_from_environ()))
+        for k, v in options.items():
+            if len(k) == 1:
+                option = '-%s' % k.lower()
             else:
-                logger.info('Shutting down. Never received a Task [callback:worker_ready]')
-                _shutdown_worker(context)
-        # only one alarm SIGALRM is allowed to exist at a time
-        # this cancels any previous alarms and set a new one
-        wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
+                option = '--%s' % k.lower()
+            command_argv.append(option)
 
-    @task_prerun.connect  # Task already got.
-    def _unset_watchdogs(*args, **kwargs):
-        # Worker is not received on this signal, direct or indirectly :/
-        worker = context['worker']
-        worker.__task_received = True
+            if v:
+                command_argv.append('%s' % v)
 
-        logger.info('Task received! [task_prerun]')
-        cancel_wakeme()
+        logger.info('Starting the worker(s)')
+        logger.debug('Command: %s', ' '.join(command_argv))
+        try:
+            celery.bin.celery.main(command_argv)  # Will block until worker dies.
+        except SystemExit as e:  # Worker is dead.
+            logger.debug('Caught a SystemExit.')
+            state = celery.worker.state
+            state.should_stop = False
+            state.should_terminate = False
+            return e
+        raise RuntimeError('Is the worker left running?')
 
-        # New task should be rejected and returned if one was already processed.
-        worker.consumer.connection._default_channel.do_restore = True
-        assert not worker.__task_finished, 'Should had shutdown on task_success. Not here!'
-
-        watchdog_context = context['worker_watchdog']
-        watchdog.inform_worker_busy(
+    def _shutdown_worker(self):
+        # Inform the Watchdog Monitor [leave]
+        watchdog_context = self._watchdog_context
+        watchdog.inform_worker_leave(
             watchdog_context['intercom'],
             watchdog_context['worker_id'],
             prefix=watchdog_context['prefix'],
         )
+        self.is_shutting_down = False
+        raise WorkerShutdown()
 
-    @task_success.connect
-    def _ack_success(sender=None, *args, **kwargs):
-        task = sender
-        logger.info('Job done. Stop receiving new messages avoiding Kombu prefetch. [task_success]')
+    def is_time_up(self):
+        """
+        Will a new task fail if it uses the whole task_max_lifetime?
+        """
+        return self._task_max_lifetime > self.lifetime_getter()
 
-        worker = context['worker']  # TODO: Get the list of queues.
-        worker.consumer.cancel_task_queue('celery')  # Manually, to prevent the next line to receive a new task
-        task._original_request.message.ack()  # Manually, as WorkerShutdown() will redeliver current message
+    def maybe_attach_hooks(self, wait_connection=8.0, wait_job=4.0):
+        """
+        Register the needed hooks:
+        - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
+        - After broker connected, shutdown if cannot receive a job within 'wait_job'
+        This safeguards against empty queues too.
+        - Receiving a job, clears the watchdogs.
+        - Finished a job, set an alarm for shutdown, allowing Task to acknowledge()
+        - If a new task comes after the 1st processed, reject and shutdown.
+        """
+        if self.hooks:
+            logger.debug('Old worker instance. Already have hooks.')
+            return self.hooks
+        logger.debug('Fresh worker instance. Attach hooks!')
 
-    @task_postrun.connect  # Task finished
-    def _demand_shutdown(*args, **kwargs):
-        worker = context['worker']
-        worker.__task_finished = True
-        logger.info('Job done. Now shutdown! [task_postrun]')
+        logger.info('Attaching Celery hooks')
+        logger.debug('Wait connection time: %.2f', wait_connection)
+        logger.debug('Wait job time: %.2f', wait_job)
+
+        @celeryd_init.connect  # After worker process up
+        def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
+            logger.debug('Connecting to the broker [celeryd_init]')
+            self._worker = worker = instance
+
+            worker.__broker_connected = False
+            def _maybe_shutdown(*args, **kwargs):
+                assert worker.__broker_connected == False, 'Broker conected but ALRM received?'
+                logger.info('Shutting down. Never connected to the broker [callback:celeryd_init]')
+                self._shutdown_worker()
+
+            # Set shutdown signal in case we don't connect in wait_connection seconds
+            wakeme_soon(delay=wait_connection, callback=_maybe_shutdown)
+
+        # #######
+        # @worker_init.connect  # Before connecting, if -P solo
+        # def _worker_init(sender=None, *args, **kwargs):
+        #     logger.debug('Connecting to the broker [worker_init]')
+        # #######
+
+        @worker_ready.connect  # After broker queue connected
+        def _set_job_watchdog(sender=None, *args, **kwargs):
+            # assert context['worker'] == sender.controller, 'Oops: Are the CONTEXT messed?'
+            worker = self._worker
+
+            if sender:
+                worker.__broker_connected = True
+                logger.debug('Connected to the broker! [worker_ready]')
+
+            worker.__task_received = False
+            worker.__task_finished = False
+
+            # HACK: (Re)start to listen the queue. Could had been silenced before.
+            worker.consumer.add_task_queue('celery')  # TODO: Select the queue dynamically
+
+            def _maybe_shutdown(*args, **kwargs):
+                if worker.__task_received:
+                    logger.debug('Keep going. Task received [callback:worker_ready]')
+                else:
+                    logger.info('Shutting down. Never received a Task [callback:worker_ready]')
+                    self._shutdown_worker()
+            # only one alarm SIGALRM is allowed to exist at a time
+            # this cancels any previous alarms and set a new one
+            wakeme_soon(delay=wait_job, callback=_maybe_shutdown)
+
+        @task_prerun.connect  # Task already got.
+        def _unset_watchdogs(*args, **kwargs):
+            # Worker is not received on this signal, direct or indirectly :/
+            worker = self._worker
+            worker.__task_received = True
+
+            logger.info('Task received! [task_prerun]')
+            cancel_wakeme()
+
+            # New task should be rejected and returned if one was already processed.
+            worker.consumer.connection._default_channel.do_restore = True
+            assert not worker.__task_finished, 'Should had shutdown on task_success. Not here!'
+
+            watchdog_context = self._watchdog_context
+            watchdog.inform_worker_busy(
+                watchdog_context['intercom'],
+                watchdog_context['worker_id'],
+                prefix=watchdog_context['prefix'],
+            )
+
+        @task_success.connect
+        def _ack_success(sender=None, *args, **kwargs):
+            task = sender
+            logger.info('Job done. Consider stop receiving new messages avoiding Kombu prefetch. [task_success]')
+
+            worker = self._worker  # TODO: Get the list of queues.
+            if self.is_time_up():
+                self.is_shutting_down = True
+                logger.info('No time for another job. Stop listening the queue! [task_success]')
+                worker.consumer.cancel_task_queue('celery')  # Manually, to prevent the next line to receive a new task
+                task._original_request.message.ack()  # Manually, as WorkerShutdown() will redeliver current message
+
+        @task_postrun.connect  # Task finished
+        def _consider_a_shutdown(*args, **kwargs):
+            worker = self._worker
+            worker.__task_finished = True
+
+            if self.is_shutting_down:
+                logger.info('No time for another job. Now shutdown! [task_postrun]')
+                self._demand_shutdown(*args, **kwargs)
+            else:
+                logger.info('There is still time for another job. Keep fetching! [task_postrun]')
+                _set_job_watchdog()
+
+        # Using weak references. Is up to the caller to clear the callbacks produced
+        self.hooks.extend([_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _consider_a_shutdown])
+        return self.hooks
+
+    def _demand_shutdown(self, *args, **kwargs):
+        worker = self._worker
 
         # Hack around "Worker shutdown creates duplicate messages in SQS broker"
         # (applies to any broker but 'amqp', if I understand correctly)
@@ -229,7 +301,4 @@ def attach_hooks(wait_connection=8.0, wait_job=4.0):
         # See: https://gist.github.com/lovemyliwu/af5112de25b594205a76c3bfd00b9340
         worker.consumer.connection._default_channel.do_restore = False
 
-        _shutdown_worker(context)
-
-    # Using weak references. Is up to the caller to store the callbacks produced
-    return [_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _demand_shutdown]
+        self._shutdown_worker()
