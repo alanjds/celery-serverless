@@ -84,7 +84,7 @@ class WorkerRunner(object):
     hooks = []
     _current_runner = None
 
-    def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15,
+    def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15, queues='celery',
                  intercom_url='', lambda_context=None, worker_metadata=None):
         # To store the Worker instance.
         # Sometime it will change to a Thread or Async aware thing
@@ -98,6 +98,7 @@ class WorkerRunner(object):
         self._softlimit = softlimit
         self._hardlimit = hardlimit
         self._task_max_lifetime = task_max_lifetime
+        self._queues = queues.strip().split(',') if hasattr(queues, 'split') else queues
 
         self._intercom_url = intercom_url or os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
         assert self._intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
@@ -236,7 +237,8 @@ class WorkerRunner(object):
             worker.__task_finished = False
 
             # HACK: (Re)start to listen the queue. Could had been silenced before.
-            worker.consumer.add_task_queue('celery')  # TODO: Select the queue dynamically
+            for q in self._queues:
+                worker.consumer.add_task_queue(q)
 
             def _maybe_shutdown(*args, **kwargs):
                 self = cls._current_runner
@@ -276,11 +278,12 @@ class WorkerRunner(object):
             task = sender
             logger.info('Job done. Consider stop receiving new messages avoiding Kombu prefetch. [task_success]')
 
-            worker = self._worker  # TODO: Get the list of queues.
+            worker = self._worker
             if self.is_time_up():
                 self.is_shutting_down = True
                 logger.info('No time for another job. Stop listening the queue! [task_success]')
-                worker.consumer.cancel_task_queue('celery')  # Manually, to prevent the next line to receive a new task
+                for q in self._queues:  # Manually, to prevent the next ack() to receive a new task
+                    worker.consumer.cancel_task_queue(q)
                 task._original_request.message.ack()  # Manually, as WorkerShutdown() will redeliver current message
 
         @task_postrun.connect  # Task finished

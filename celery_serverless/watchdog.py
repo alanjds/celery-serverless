@@ -171,16 +171,16 @@ pyamqp.Channel._size = _AMQPChannel_size
 class KombuQueueLengther(object):
     KOMBU_HEARTBEAT = 2
 
-    def __init__(self, url, queue):
+    def __init__(self, url, queues):
         self.connection = Connection(url, heartbeat=self.KOMBU_HEARTBEAT)
-        self.queue = queue
+        self.queues = queues.strip().split(',') if hasattr(queues, 'split') else queues
         self._maybe_dirty = False
 
     @backoff.on_exception(backoff.fibo, ConnectionError, max_value=9, max_time=30, jitter=backoff.full_jitter)
     def __len__(self):
         if self._maybe_dirty:
             time.sleep(self.KOMBU_HEARTBEAT * 1.5)
-        result = self.connection.channel()._size(self.queue)
+        result = sum((self.connection.channel()._size(q) for q in self.queues))
 
         # Kombu queue length will not change until next heartbeat.
         # Would be better to use a token-bucket timeout,
