@@ -82,12 +82,14 @@ def remaining_lifetime_getter(lambda_context=None) -> 'float':
 
 class WorkerRunner(object):
     hooks = []
+    _current_runner = None
 
     def __init__(self, task_max_lifetime=300-15-30, softlimit=30, hardlimit=15,
                  intercom_url='', lambda_context=None, worker_metadata=None):
         # To store the Worker instance.
         # Sometime it will change to a Thread or Async aware thing
         self.worker = None
+        WorkerRunner._current_runner = self
 
         _lifetime_generator = remaining_lifetime_getter(lambda_context)
         self.lifetime_getter = lambda: next(_lifetime_generator)
@@ -115,7 +117,7 @@ class WorkerRunner(object):
 
 
     def run_worker(self, **options):
-        self.maybe_attach_hooks()
+        WorkerRunner.maybe_attach_hooks()
         remaining_seconds = self.lifetime_getter()
 
         command_argv = [
@@ -179,7 +181,8 @@ class WorkerRunner(object):
         """
         return self._task_max_lifetime > self.lifetime_getter()
 
-    def maybe_attach_hooks(self, wait_connection=8.0, wait_job=4.0):
+    @classmethod
+    def maybe_attach_hooks(cls, wait_connection=8.0, wait_job=4.0):
         """
         Register the needed hooks:
         - At start, shutdown if cannot get a Broker within 'wait_connection' seconds
@@ -189,9 +192,9 @@ class WorkerRunner(object):
         - Finished a job, set an alarm for shutdown, allowing Task to acknowledge()
         - If a new task comes after the 1st processed, reject and shutdown.
         """
-        if self.hooks:
+        if cls.hooks:
             logger.debug('Old worker instance. Already have hooks.')
-            return self.hooks
+            return cls.hooks
         logger.debug('Fresh worker instance. Attach hooks!')
 
         logger.info('Attaching Celery hooks')
@@ -200,6 +203,7 @@ class WorkerRunner(object):
 
         @celeryd_init.connect  # After worker process up
         def _set_broker_watchdog(conf=None, instance=None, *args, **kwargs):
+            self = cls._current_runner
             logger.debug('Connecting to the broker [celeryd_init]')
             self._worker = worker = instance
 
@@ -220,6 +224,7 @@ class WorkerRunner(object):
 
         @worker_ready.connect  # After broker queue connected
         def _set_job_watchdog(sender=None, *args, **kwargs):
+            self = cls._current_runner
             # assert context['worker'] == sender.controller, 'Oops: Are the CONTEXT messed?'
             worker = self._worker
 
@@ -234,6 +239,7 @@ class WorkerRunner(object):
             worker.consumer.add_task_queue('celery')  # TODO: Select the queue dynamically
 
             def _maybe_shutdown(*args, **kwargs):
+                self = cls._current_runner
                 if worker.__task_received:
                     logger.debug('Keep going. Task received [callback:worker_ready]')
                 else:
@@ -245,6 +251,7 @@ class WorkerRunner(object):
 
         @task_prerun.connect  # Task already got.
         def _unset_watchdogs(*args, **kwargs):
+            self = cls._current_runner
             # Worker is not received on this signal, direct or indirectly :/
             worker = self._worker
             worker.__task_received = True
@@ -265,6 +272,7 @@ class WorkerRunner(object):
 
         @task_success.connect
         def _ack_success(sender=None, *args, **kwargs):
+            self = cls._current_runner
             task = sender
             logger.info('Job done. Consider stop receiving new messages avoiding Kombu prefetch. [task_success]')
 
@@ -277,6 +285,7 @@ class WorkerRunner(object):
 
         @task_postrun.connect  # Task finished
         def _consider_a_shutdown(*args, **kwargs):
+            self = cls._current_runner
             worker = self._worker
             worker.__task_finished = True
 
@@ -288,8 +297,8 @@ class WorkerRunner(object):
                 _set_job_watchdog()
 
         # Using weak references. Is up to the caller to clear the callbacks produced
-        self.hooks.extend([_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _consider_a_shutdown])
-        return self.hooks
+        cls.hooks.extend([_set_broker_watchdog, _set_job_watchdog, _unset_watchdogs, _ack_success, _consider_a_shutdown])
+        return cls.hooks
 
     def _demand_shutdown(self, *args, **kwargs):
         worker = self._worker
