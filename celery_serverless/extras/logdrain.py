@@ -55,7 +55,7 @@ def get_syslog_handler(logdrain_url:str):
     return handler
 
 
-def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logformat):
+def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logformat, redirect_stdout=True):
     if logdrain_url.startswith('syslog'):
         handler = get_syslog_handler(logdrain_url)
     else:
@@ -66,4 +66,29 @@ def init_logdrain(logdrain_url=logdrain_url, logdrain_logformat=logdrain_logform
         handler.setFormatter(formatter)
 
     setup_logging(handler, exclude=[])  # Sentry made it so easy! Thanks S2
+
+    if redirect_stdout:
+        logging.debug('Installing _stdout logging redirection')
+
+        sys._original_stdout = sys.stdout
+        stdout_logger = logging.getLogger('_stdout')
+        sys.stdout = StreamToLogger(stdout_logger, print_to=sys._original_stdout)
+
+        sys._original_stderr = sys.stderr
+        stderr_logger = logging.getLogger('_stderr')
+        sys.stderr = StreamToLogger(stderr_logger, print_to=sys._original_stderr)
+
     return handler
+
+
+# See: https://github.com/iopipe/iopipe-python/blob/662dca0aa3bccf8a77e9a64b2b6bf87f558f2a84/iopipe/contrib/logger/plugin.py#L70
+class StreamToLogger(object):
+    def __init__(self, logger, print_to=None):
+        self.logger = logger
+        self.print_to = print_to
+
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            if self.print_to:
+                print(line, file=self.print_to)
+            self.logger.debug(line.rstrip())
