@@ -26,10 +26,15 @@ DEFAULT_WORKER_EXPIRE = 6 * 60  # 6 minutes
 DEFAULT_STARTED_TIMEOUT = 30 # half minute
 
 
+class ShutdownException(RuntimeError):
+    pass
+
+
 class Watchdog(object):
-    def __init__(self, communicator=None, name='', lock=None, watched=None):
+    def __init__(self, communicator=None, name='', lock=None, watched=None, shutdown_key=''):
         self._intercom = communicator
         self._name = name or DEFAULT_BASENAME
+        self._shutdown_key = shutdown_key
         self._lock = lock or dummy_threading.Lock()
         self._watched = watched
         self.pool_size = 200
@@ -54,6 +59,15 @@ class Watchdog(object):
         len_ = len(self._watched)
         logger.debug('_watched reported %s jobs awaiting', len_)
         return len_
+
+    def is_shutdown_requested(self):
+        if hasattr(self._intercom, 'get_shutdown_requested'):
+            return self._intercom.get_shutdown_requested(self._shutdown_key)
+        return self._get_shutdown_requested(self._shutdown_key)
+
+    def _get_shutdown_requested(self, shutdown_key):
+        final_key = shutdown_key.format(prefix=self._name)
+        self._intercom.get(final_key)
 
     #
     # Actions:
@@ -125,9 +139,14 @@ class Watchdog(object):
                     logger.debug('Empty queue and no worker running. Stop monitoring')
                     break
 
+                # 2b) Stop if shutdown requested via intercom.
+                elif self.is_shutdown_requested():
+                    logger.debug('Shutdown requested.')
+                    raise ShutdownException()
+
                 logger.debug('We have %s enqueued tasks and %s workers running', queue_length, existing_workers)
 
-                # 2b) Start (N-existing) workers
+                # 2c) Start (N-existing) workers
                 available_workers = self.pool_size - existing_workers
                 available_workers = max(available_workers, 0)
 
