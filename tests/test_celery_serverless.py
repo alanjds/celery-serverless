@@ -60,6 +60,32 @@ def test_watchdog_needs_envvar(envname):
 
 
 @pytest.mark.timeout(30)
+def test_watchdog_shutdown(monkeypatch):
+    queue_url = 'redis://'
+    _env = dict(
+        CELERY_SERVERLESS_QUEUE_URL=queue_url,
+        CELERY_SERVERLESS_LOCK_URL=queue_url,
+        CELERY_SERVERLESS_INTERCOM_URL=queue_url,
+    )
+
+    monkeypatch.setattr(
+        'celery_serverless.watchdog.Watchdog.get_workers_count',
+        lambda self: 1,
+    )
+
+    _shutdown_requested_responses = [False, False, False, True, 'success']
+    monkeypatch.setattr(
+        'celery_serverless.watchdog.Watchdog.is_shutdown_requested',
+        lambda self: _shutdown_requested_responses.pop(0),
+    )
+
+    with env.set_env(**_env):
+        response = handler_watchdog(None, None)
+
+    assert _shutdown_requested_responses == ['success'], 'handler not stopped with `is_shutdown_requested() = True`'
+
+
+@pytest.mark.timeout(30)
 def test_watchdog_monitor_redis_queues(monkeypatch):
     queue_url = 'redis://'
     queue_name = 'celery'

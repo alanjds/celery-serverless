@@ -21,7 +21,8 @@ from redis import StrictRedis
 from redis.lock import LockError
 from timeoutcontext import timeout as timeout_context
 from celery_serverless.invoker import invoke_watchdog
-from celery_serverless.watchdog import Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock
+from celery_serverless.watchdog import (Watchdog, KombuQueueLengther, build_intercom, get_watchdog_lock,
+                                        ShutdownException)
 from celery_serverless.worker_management import WorkerRunner, remaining_lifetime_getter
 
 
@@ -55,6 +56,7 @@ def watchdog(event, context):
 
     intercom_url = os.environ.get('CELERY_SERVERLESS_INTERCOM_URL')
     assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
+    shutdown_key = os.environ.get('CELERY_SERVERLESS_SHUTDOWN_KEY', '{prefix}:shutdown')
 
     lock, lock_name = get_watchdog_lock(enforce=True)
 
@@ -64,13 +66,22 @@ def watchdog(event, context):
         queue_names = os.environ.get('CELERY_SERVERLESS_QUEUES', 'celery')
         watched = KombuQueueLengther(queue_url, queue_names)
 
-    watchdog = Watchdog(communicator=build_intercom(intercom_url), name=lock_name, lock=lock, watched=watched)
+    watchdog = Watchdog(
+        communicator=build_intercom(intercom_url),
+        name=lock_name, lock=lock, watched=watched, shutdown_key=shutdown_key,
+    )
 
     try:
         remaining_seconds = context.get_remaining_time_in_millis() / 1000.0
     except Exception as e:
         logger.exception('Could not got remaining_seconds. Is the context right?')
         remaining_seconds = 5 * 60 # 5 minutes by default
+
+    def _force_unlock():
+        try:
+            lock.release()
+        except (RuntimeError, AttributeError, LockError):
+            pass
 
     spare_time = 30  # Should be enough time to retrigger this FaaS again
     fulfilled = False
@@ -80,17 +91,15 @@ def watchdog(event, context):
             fulfilled = True
     except TimeoutError:
         logger.warning('Still stuff to monitor but this Function is out of time. Preparing to reinvoke the Watchdog')
-
         # Be sure that the lock is released. Then reinvoke.
-        try:
-            lock.release()
-        except (RuntimeError, AttributeError, LockError):
-            pass
-
+        _force_unlock()
         logger.info('All set. Reinvoking the Watchdog')
         _, future = invoke_watchdog(check_lock=False)
         future.result()
         logger.info('Done reinvoking another Watchdog')
+    except ShutdownException:
+        logger.warning('Shutdown executed.')
+        _force_unlock()
 
     logger.debug('Cleaning up before exit')
     body = {
