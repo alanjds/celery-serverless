@@ -94,7 +94,7 @@ def watchdog(event, context):
         # Be sure that the lock is released. Then reinvoke.
         _force_unlock()
         logger.info('All set. Reinvoking the Watchdog')
-        _, future = invoke_watchdog(check_lock=False)
+        _, future = invoke_watchdog(force=True)
         future.result()
         logger.info('Done reinvoking another Watchdog')
     except ShutdownException:
