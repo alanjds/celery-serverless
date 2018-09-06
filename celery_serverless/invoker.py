@@ -62,7 +62,7 @@ def _get_awslambda_arn(function_name):
         if func['FunctionName'] == function_name:
             return func['FunctionArn']
 
-    raise RuntimeError('Handler %s not found deployed on service %s', handler_name, filter_string)
+    raise RuntimeError('Function %s not found', function_name)
 
 
 class Invoker(object):
