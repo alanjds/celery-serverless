@@ -44,7 +44,7 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
         times_invoked += 1
 
         # 1) Watchdog fetches its lock
-        lock, lock_name = watchdog.get_watchdog_lock(enforce=True)
+        lock, lock_name = watchdog.get_watchdog_lock()
 
         # 2) It runs with the lock or cancels
         with_lock = lock.acquire(False)
@@ -71,7 +71,7 @@ def test_watchdog_monitor_redis_queues(monkeypatch):
         client_futures = []
         times_invoked = 0
 
-        with env.set_env(CELERY_SERVERLESS_LOCK_URL=lock_url):
+        with env.set_env(CELERY_SERVERLESS_LOCK_URL=lock_url, CELERY_SERVERLESS_CLIENT_LOCK_URL=lock_url):
             for i in range(20):
                 client_futures.append(executor.submit(invoker.client_invoke_watchdog))
 

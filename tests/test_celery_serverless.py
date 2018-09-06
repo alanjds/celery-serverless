@@ -39,7 +39,7 @@ def test_worker_handler_minimal_call():
 def test_watchdog_handler_minimal_call():
     _env = dict(
         CELERY_SERVERLESS_QUEUE_URL='disabled',
-        CELERY_SERVERLESS_LOCK_URL='disabled',
+        CELERY_SERVERLESS_LOCK_URL='dummy_threading://',
         CELERY_SERVERLESS_INTERCOM_URL='disabled',
     )
     with env.set_env(**_env):
@@ -67,6 +67,15 @@ def test_watchdog_shutdown(monkeypatch):
         CELERY_SERVERLESS_LOCK_URL=queue_url,
         CELERY_SERVERLESS_INTERCOM_URL=queue_url,
     )
+
+    redis = pytest.importorskip('redis')
+    from redis.exceptions import ConnectionError
+
+    conn = redis.StrictRedis.from_url(queue_url)
+    try:
+        conn.ping()
+    except ConnectionError as err:
+        pytest.skip('Redis server is not available: %s' % err)
 
     monkeypatch.setattr(
         'celery_serverless.watchdog.Watchdog.get_workers_count',
