@@ -58,7 +58,7 @@ def watchdog(event, context):
     assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
     shutdown_key = os.environ.get('CELERY_SERVERLESS_SHUTDOWN_KEY', '{prefix}:shutdown')
 
-    lock, lock_name = get_watchdog_lock(enforce=True)
+    lock, lock_name = get_watchdog_lock()
 
     if queue_url == 'disabled':
         watched = None
