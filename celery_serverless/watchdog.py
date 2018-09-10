@@ -67,7 +67,7 @@ class Watchdog(object):
 
     def _get_shutdown_requested(self, shutdown_key):
         final_key = shutdown_key.format(prefix=self._name)
-        self._intercom.get(final_key)
+        return self._intercom.get(final_key)
 
     #
     # Actions:
