@@ -58,7 +58,7 @@ def watchdog(event, context):
     assert intercom_url, 'The CELERY_SERVERLESS_INTERCOM_URL envvar should be set. Even to "disabled" to disable it.'
     shutdown_key = os.environ.get('CELERY_SERVERLESS_SHUTDOWN_KEY', '{prefix}:shutdown')
 
-    lock, lock_name = get_watchdog_lock(enforce=True)
+    lock, lock_name = get_watchdog_lock()
 
     if queue_url == 'disabled':
         watched = None
@@ -94,7 +94,7 @@ def watchdog(event, context):
         # Be sure that the lock is released. Then reinvoke.
         _force_unlock()
         logger.info('All set. Reinvoking the Watchdog')
-        _, future = invoke_watchdog(check_lock=False)
+        _, future = invoke_watchdog(force=True)
         future.result()
         logger.info('Done reinvoking another Watchdog')
     except ShutdownException:
