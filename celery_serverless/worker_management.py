@@ -23,6 +23,7 @@ class PatchedRequest(celery.worker.request.Request):
         logger.warning('Passing Request into the tasks')
         self.task._original_request = self  # Should I ?
 # Monkey patch!! Ahoy!
+# May be not needed: https://github.com/celery/celery/pull/3977
 celery.worker.request._patched_Request = celery.worker.request.Request
 celery.worker.request.Request = PatchedRequest
 
@@ -168,7 +169,7 @@ class WorkerRunner(object):
     def _shutdown_worker(self):
         # Inform the Watchdog Monitor [leave]
         watchdog_context = self._watchdog_context
-        watchdog.inform_worker_leave(
+        watchdog_context['intercom'].inform_worker_leave(
             watchdog_context['intercom'],
             watchdog_context['worker_id'],
             prefix=watchdog_context['prefix'],
