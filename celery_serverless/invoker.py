@@ -62,7 +62,7 @@ def _get_awslambda_arn(function_name):
         if func['FunctionName'] == function_name:
             return func['FunctionArn']
 
-    raise RuntimeError('Handler %s not found deployed on service %s', handler_name, filter_string)
+    raise RuntimeError('Function %s not found', function_name)
 
 
 class Invoker(object):
@@ -219,25 +219,25 @@ def invoke(target='watchdog', config=None, *args, **kwargs):
     return Invoker(target=target, config=config).invoke_main(*args, **kwargs)
 
 
-def invoke_worker(config=None, data=None, *args, **kwargs):
+def invoke_worker(data=None, *args, **kwargs):
     return invoke(target='worker', extra_data=data or {}, *args, **kwargs)
 
 
-def invoke_watchdog(config=None, data=None, check_lock=True, *args, **kwargs):
+def invoke_watchdog(data=None, force=False, *args, **kwargs):
     from .watchdog import get_watchdog_lock
 
-    if check_lock:
-        lock_watchdog = get_watchdog_lock(enforce=False)[0]
+    if not force:
+        lock_watchdog = get_watchdog_lock()[0]
         if lock_watchdog.locked():
             logger.info('Watchdog lock already held. Giving up.')
             return False, RuntimeError('Watchdog lock already held')
     return invoke(target='watchdog', extra_data=data or {}, *args, **kwargs)
 
 
-def client_invoke_watchdog(check_lock=True, blocking_lock=False, *args, **kwargs):
-    if not check_lock:
+def client_invoke_watchdog(force=False, force_watchdog=False, blocking_lock=False, *args, **kwargs):
+    if force:
         logger.debug('Not checking client lock')
-        return invoke_watchdog(check_lock=True, *args, **kwargs)
+        return invoke_watchdog(force=force_watchdog, *args, **kwargs)
 
     client_lock = get_client_lock()[0]
     locked = client_lock.acquire(blocking_lock)
@@ -247,7 +247,7 @@ def client_invoke_watchdog(check_lock=True, blocking_lock=False, *args, **kwargs
 
     logger.debug('Got the client lock')
     try:
-        return invoke_watchdog(with_lock=True, *args, **kwargs)
+        return invoke_watchdog(force=force_watchdog, *args, **kwargs)
     finally:
         logger.debug('Releasing the client lock')
         client_lock.release()
