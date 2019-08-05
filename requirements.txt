@@ -1,5 +1,5 @@
 click==7.0
-celery==4.2.1
+celery==4.3.0
 ruamel.yaml==0.15.71
 boto3==1.9.18
 botocore==1.12.18
