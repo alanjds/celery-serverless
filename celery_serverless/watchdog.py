@@ -239,7 +239,7 @@ def inform_worker_new(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENAM
         pipe.hmset(worker_key, metadata)
         pipe.expire(worker_key, DEFAULT_WORKER_EXPIRE)
 
-        pipe.zadd(workers_started_key, **{worker_key: metadata['time_join']})
+        pipe.zadd(workers_started_key, {worker_key: metadata['time_join']})
         pipe.expire(workers_started_key, DEFAULT_WORKER_EXPIRE)  # Renew expire limit
         result, _, result_zadd, *_ = pipe.execute()
 
@@ -259,7 +259,7 @@ def inform_worker_busy(redis:'StrictRedis', worker_id:str, prefix=DEFAULT_BASENA
     epoch_now = datetime.now(timezone.utc).timestamp()  # secs from epoch
 
     with redis.pipeline() as pipe:
-        pipe.zadd(workers_busy_key, **{worker_key: epoch_now})
+        pipe.zadd(workers_busy_key, {worker_key: epoch_now})
         pipe.zrem(workers_started_key, worker_key)
 
         # Renew expire limits

@@ -6,8 +6,8 @@ celery-serverless
 .. image:: https://img.shields.io/pypi/v/celery_serverless.svg
         :target: https://pypi.python.org/pypi/celery_serverless
 
-.. image:: https://img.shields.io/travis/alanjds/celery-serverless.svg
-        :target: https://travis-ci.org/alanjds/celery-serverless
+.. image:: https://github.com/stuaxo/celery-serverless/actions/workflows/test.yml/badge.svg?branch=master
+        :target: https://github.com/alanjds/celery-serverless/actions/workflows/test.yml
 
 .. image:: https://readthedocs.org/projects/celery-serverless/badge/?version=latest
         :target: https://celery-serverless.readthedocs.io/en/latest/?badge=latest
