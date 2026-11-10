@@ -11,7 +11,7 @@ with open('README.rst') as readme_file:
 
 requirements = [
     'Click>=6.0',
-    'celery~=4.2.0',
+    'celery>=4.2,<5.3',
     'ruamel.yaml~=0.15.37',
     'future-thread~=1.0',
     'redis>=2.10.6',
